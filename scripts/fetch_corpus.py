@@ -7,8 +7,9 @@ extend the corpus:
     # direct connection
     python scripts/fetch_corpus.py
 
-    # behind a proxy (Clash / 肥猫云 / any HTTP proxy)
-    HTTPS_PROXY=http://127.0.0.1:7897 python scripts/fetch_corpus.py
+    # If your network requires an HTTP proxy, configure it locally before running.
+    # Do not commit personal proxy settings to this repository.
+    python scripts/fetch_corpus.py
 
 Source: Wikipedia MediaWiki API `prop=extracts&explaintext=1` (plain text).
 Each file is a short EXCERPT of the lead + early technical sections. See
