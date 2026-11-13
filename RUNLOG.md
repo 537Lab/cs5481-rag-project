@@ -400,3 +400,15 @@ GitHub Free + 私有仓库**不支持**强制分支保护 / Rulesets。按"不�
 1. 在 GitHub `Settings → Collaborators` 邀请另外 4 名组员（私有仓库，未被邀请看不到）。
 2. 若希望强制保护：升级 GitHub Pro，或全组讨论是否改为 public（**未擅自改动可见性**）。
 3. 真实 LLM API 调用：需提供密钥并确认费用/额度方案后才执行；目前**零付费调用**。
+
+### 补记：bootstrap 完成
+
+- 二次提交 `3f3176a`（`START_HERE.md`、`docs/TASKS.md`、`docs/DEV_LOG.md`、
+  `docs/AI_USAGE.md`、`CONTRIBUTING.md`、PR 模板、README、RUNLOG）已推 `main`；
+  第二次 CI run `43424432557` → **completed / success**（`ruff` + `pytest` + 密钥扫描）。
+- 5 个 GitHub Issues **#1–#5**（T1–T5）已创建，全部带 `task` 标签，供组员认领。
+- 对**远端仓库文件树**做了最终核查（`gh api .../git/trees/main?recursive=1`）：
+  62 个条目，**无** `.env` / `.venv` / 缓存 / `chroma.sqlite` / `.tmp/` / `eval/results/` /
+  `__pycache__`；`START_HERE.md` 等关键文档均在远端。
+- 本地 `git status --short` 为空（干净），`origin/main` 与本地 `main` 一致。
+- 本地全量测试最终状态：`57 passed, 2 skipped`；`ruff check .` 通过。
