@@ -1,0 +1,30 @@
+# --- secrets: never commit ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- python ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# --- generated artefacts (rebuild locally with `cli ingest`) ---
+data/index/*
+!data/index/.gitkeep
+eval/results/
+*.log
+
+# --- OS / editor ---
+.DS_Store
+.idea/
+.vscode/
+
+# --- local tool scratch (never commit) ---
+.tmp/
+# 8-character, extension-less scratch files left by some shell/agent sessions
+/[a-z0-9_][a-z0-9_][a-z0-9_][a-z0-9_][a-z0-9_][a-z0-9_][a-z0-9_][a-z0-9_]

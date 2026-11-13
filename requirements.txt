@@ -1,0 +1,5 @@
+# Runtime dependencies. Keep this list short on purpose.
+# chromadb: embedded persistent vector database + local ONNX MiniLM embedding model
+# openai:   OpenAI-compatible LLM and (optional) API embedding client
+chromadb>=1.0,<2
+openai>=1.40,<2

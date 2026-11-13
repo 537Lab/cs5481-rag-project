@@ -1,0 +1,20 @@
+# Only tooling configuration. This project is NOT a pip-installable package:
+# run every command from the repository root so that `import ragkit` works.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+markers = [
+    "real: requires the local ONNX model download and/or OPENAI_API_KEY; skipped by default",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]

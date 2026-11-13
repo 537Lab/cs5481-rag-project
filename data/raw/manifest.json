@@ -1,0 +1,34 @@
+[
+  {
+    "doc_id": "rag_wikipedia",
+    "path": "rag_wikipedia.txt",
+    "title": "Retrieval-augmented generation",
+    "source_uri": "https://en.wikipedia.org/wiki/Retrieval-augmented_generation",
+    "license": "CC BY-SA 4.0",
+    "notes": "Plain-text excerpt (4166 chars) of the Wikipedia article, fetched via the MediaWiki API. Attribution in SOURCES.md."
+  },
+  {
+    "doc_id": "vector_db_wikipedia",
+    "path": "vector_db_wikipedia.txt",
+    "title": "Vector database",
+    "source_uri": "https://en.wikipedia.org/wiki/Vector_database",
+    "license": "CC BY-SA 4.0",
+    "notes": "Plain-text excerpt (3245 chars) of the Wikipedia article, fetched via the MediaWiki API. Attribution in SOURCES.md."
+  },
+  {
+    "doc_id": "word_embedding_wikipedia",
+    "path": "word_embedding_wikipedia.txt",
+    "title": "Word embedding",
+    "source_uri": "https://en.wikipedia.org/wiki/Word_embedding",
+    "license": "CC BY-SA 4.0",
+    "notes": "Plain-text excerpt (3327 chars) of the Wikipedia article, fetched via the MediaWiki API. Attribution in SOURCES.md."
+  },
+  {
+    "doc_id": "bm25_wikipedia",
+    "path": "bm25_wikipedia.txt",
+    "title": "Okapi BM25",
+    "source_uri": "https://en.wikipedia.org/wiki/Okapi_BM25",
+    "license": "CC BY-SA 4.0",
+    "notes": "Plain-text excerpt (2874 chars) of the Wikipedia article, fetched via the MediaWiki API. Attribution in SOURCES.md."
+  }
+]

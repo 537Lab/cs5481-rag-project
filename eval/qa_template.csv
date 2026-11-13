@@ -1,0 +1,3 @@
+﻿qid,question,reference_answer,evidence_doc_id,evidence_quote,category,notes
+SAMPLE-001,"When was retrieval-augmented generation first proposed?","2020, in a paper by Lewis et al.","rag_wikipedia","The term retrieval-augmented generation (RAG) was introduced in a 2020 paper",answerable,"FORMAT EXAMPLE ONLY. Gold evidence is a verbatim quote from the ORIGINAL document; it maps to a character span and is independent of chunk ids and chunking strategy."
+SAMPLE-002,"What is the cafeteria menu at the Mars research base?","","","",unanswerable,"FORMAT EXAMPLE ONLY. No evidence exists in the corpus; the system must abstain. Used to measure the correct abstention rate."

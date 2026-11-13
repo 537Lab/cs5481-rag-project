@@ -1,0 +1,37 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Static check (ruff)
+        run: ruff check .
+
+      # Offline only: MOCK doubles, no API key, no model download.
+      # test_e2e_real.py is marked `real` and stays skipped here.
+      - name: Tests (offline)
+        run: python -m pytest -q
+
+      - name: Verify no secret was committed
+        run: |
+          if git grep -nE 'sk-[A-Za-z0-9]{16,}' -- . ':!*.md' ; then
+            echo "::error::A credential-looking string was found in the repository."
+            exit 1
+          fi
+          echo "No credential-looking strings found."

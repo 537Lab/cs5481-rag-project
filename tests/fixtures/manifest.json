@@ -1,0 +1,18 @@
+[
+  {
+    "doc_id": "mock_alpha",
+    "path": "mock_alpha.txt",
+    "title": "MOCK alpha service notes",
+    "source_uri": "",
+    "license": "MOCK - synthetic test fixture",
+    "notes": "Synthetic. Never use for the real corpus or for evaluation."
+  },
+  {
+    "doc_id": "mock_beta",
+    "path": "mock_beta.txt",
+    "title": "MOCK beta service notes",
+    "source_uri": "",
+    "license": "MOCK - synthetic test fixture",
+    "notes": "Synthetic. Never use for the real corpus or for evaluation."
+  }
+]

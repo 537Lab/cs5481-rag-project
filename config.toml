@@ -1,0 +1,33 @@
+# Non-secret settings only. NEVER put an API key in this file: it is committed to git.
+# Secrets live in .env (gitignored) or in shell environment variables.
+
+[paths]
+raw_dir = "data/raw"
+manifest = "data/raw/manifest.json"
+index_dir = "data/index"
+
+[chunking]
+# "fixed" (character windows with overlap) or "paragraph" (blank-line segments)
+# Both are MINIMAL baseline implementations. The formal comparison experiment is future work.
+strategy = "fixed"
+size = 600
+overlap = 80
+
+[embedding]
+# "local" = Chroma's bundled ONNX all-MiniLM-L6-v2 (no API key, ~80 MB first-run download)
+# "api"   = OpenAI-compatible embedding endpoint (needs OPENAI_API_KEY)
+provider = "local"
+local_model = "all-MiniLM-L6-v2"
+local_dimension = 384
+api_model = "text-embedding-3-small"
+api_dimension = 1536
+
+[llm]
+model = "gpt-4o-mini"
+temperature = 0.0
+max_tokens = 512
+
+[retrieval]
+top_k = 3
+# Cosine similarity floor. 0.0 = disabled. Reserved for the future experiment; do NOT tune yet.
+min_score = 0.0

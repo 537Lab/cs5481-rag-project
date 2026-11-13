@@ -1,0 +1,7 @@
+MOCK FIXTURE - NOT REAL DATA. Do not use for experiments or evaluation.
+
+Alpha service notes. The alpha service listens on port 8080 and writes its
+log files to /var/log/alpha.log. The alpha service is maintained by Team Blue.
+
+Restart procedure: stop the alpha service, wait ten seconds, then start it
+again. Configuration is stored in /etc/alpha/config.toml.

@@ -1,0 +1,5 @@
+MOCK FIXTURE - NOT REAL DATA. Do not use for experiments or evaluation.
+
+Beta service notes. The beta service listens on port 9090 and is read-only.
+It is maintained by Team Green. The beta service has no restart procedure;
+contact the platform team instead.
