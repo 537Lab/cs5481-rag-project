@@ -327,3 +327,76 @@ $ python -m ragkit.cli retrieve "When was retrieval-augmented generation first p
   且任何付费 API 调用需全组先确认方案。
 - 20 组正式 QA、chunking 对比实验、任何命中率/正确率数字：**未做**，属五人任务包 T2/T4。
 - GitHub Actions 云端运行：见第 10 节（本轮后续补记）。
+
+---
+
+## 10. GitHub 共享工程建立记录（2026-11-13 晚）
+
+### 环境检查（真实执行）
+
+```
+git version 2.54.0 (Apple Git-157)
+gh version 2.102.0
+gh auth status -> Logged in to github.com account 537Lab (keyring)
+                  Token scopes: 'gist', 'read:org', 'repo', 'workflow'
+                  （token 值未读取、未展示、未写入任何文件）
+本地此前无完整 git 仓库（仅残留不完整的 .git 目录，已移到 .tmp/ 备份）
+```
+
+### 初始化、核查、提交、推送
+
+```
+git init -b main
+git add -A                      -> 47 个文件
+精确核查：无 .env / .venv / 缓存 / Chroma 生成物 / eval/results/
+git grep --cached 'sk-[A-Za-z0-9]{16,}'                 -> 无命中
+git grep --cached 'OPENAI_API_KEY\s*=\s*\S+'            -> 无命中
+git show :.env.example                                  -> OPENAI_API_KEY= （空值模板）
+git commit a12bb14 "chore: v1.1 baseline after external review ..."
+
+gh repo create cs5481-rag-project --private --source=. --remote=origin --push
+  -> 仓库创建成功（PRIVATE），但 git push 报 "HTTP2 framing layer"
+git -c http.version=HTTP/1.1 push  -> "CONNECT tunnel failed, response 502"（注入代理 55013 不通）
+实测：Clash 7897 对 github.com HTTP 200；肥猫云 7892 端口未监听
+https_proxy=http://127.0.0.1:7897 git -c http.version=HTTP/1.1 push -u origin main
+  -> * [new branch] main -> main（成功）
+gh repo view -> {"defaultBranchRef":{"name":"main"},"visibility":"PRIVATE"}
+```
+
+仓库地址：**https://github.com/537Lab/cs5481-rag-project**
+
+### GitHub Actions 真实运行（关键验收）
+
+```
+gh workflow list -> ci  active
+gh run watch 43423374183 --exit-status -> WATCH_EXIT=0
+gh run view 43423374183 --json status,conclusion,jobs
+  -> {"conclusion":"success","status":"completed","steps":[
+       "Set up job","Run actions/checkout@v4","Run actions/setup-python@v5",
+       "Install dependencies","Static check (ruff)","Tests (offline)",
+       "Verify no secret was committed", ... "Complete job"]}
+```
+
+即**云端 CI 实际跑过并成功**：`ruff`、离线 `pytest`、密钥扫描三步全绿。
+仅有 GitHub 的 Node.js 20 / ubuntu-latest 迁移提示（annotation），不影响结果。
+
+### 协作规则与权限限制（如实记录）
+
+```
+gh api PATCH repos/... -f allow_auto_merge=false
+  -> {"allow_auto_merge":false,"allow_merge_commit":true,"allow_squash_merge":true}
+
+gh api PUT .../branches/main/protection    -> 403 Upgrade to GitHub Pro ...
+gh api POST .../rulesets                   -> 403 Upgrade to GitHub Pro ...
+```
+
+GitHub Free + 私有仓库**不支持**强制分支保护 / Rulesets。按"不卡住项目"的要求，
+采用文档化替代流程：关闭自动合并 + PR 模板自检 + `CONTRIBUTING.md` 规定
+"CI 绿灯且至少 1 名其他组员 Approve，由非作者手动 Squash merge"，由人工执行。
+**这不是系统强制**，已在 `START_HERE.md` 与 `CONTRIBUTING.md` 明确标注。
+
+### 需要用户本人操作的事项
+
+1. 在 GitHub `Settings → Collaborators` 邀请另外 4 名组员（私有仓库，未被邀请看不到）。
+2. 若希望强制保护：升级 GitHub Pro，或全组讨论是否改为 public（**未擅自改动可见性**）。
+3. 真实 LLM API 调用：需提供密钥并确认费用/额度方案后才执行；目前**零付费调用**。

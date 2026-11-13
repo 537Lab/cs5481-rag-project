@@ -2,6 +2,11 @@
 
 这是给 **5 人小组** 用的**起步工程**，不是最终作业。
 
+> **组员请从 [`START_HERE.md`](START_HERE.md) 开始**：仓库地址、认领任务、发 PR、判断完成标准都在那里。
+> 五个开发任务包见 [`docs/TASKS.md`](docs/TASKS.md)；实际开发记录在 [`docs/DEV_LOG.md`](docs/DEV_LOG.md)，
+> AI 辅助使用记录在 [`docs/AI_USAGE.md`](docs/AI_USAGE.md)。
+> 当前版本 v1.1：已按外部审阅修复评测共同证据标准、引用三层区分、ParagraphChunker overlap 与薄弱断言。
+
 它能跑通一条最小 RAG 流水线（读文档 → 分块 → Embedding → 向量库 → 检索 → LLM 回答 → 可回查引用 → 无答案拒答），并把五个模块的代码边界、数据格式和测试固定下来，让五个人可以同时改代码而不互相打架。
 
 **这一版明确不做**：20 组正式问答、两种 chunking 的对比实验、任何命中率/正确率数字、prompt 调优、UI、最终报告。这些是后续 PR。

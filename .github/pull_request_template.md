@@ -8,7 +8,10 @@
 
 ## Self-check (tick before requesting review)
 
-- [ ] I only changed files owned by my module (see `docs/ARCHITECTURE.md`), plus my own tests.
+- [ ] I only changed files listed in my task package (see `docs/TASKS.md`), plus my own tests.
+- [ ] My reviewer is **another group member**, not the PR author.
+- [ ] `ci / check` is green (this plan cannot enforce protection rules; I checked manually).
+- [ ] If I used a Coding Agent, I reviewed the code myself and logged it in `docs/AI_USAGE.md`.
 - [ ] I ran `python -m pytest -q` locally and it passed.
 - [ ] I ran `ruff check .` locally and it passed.
 - [ ] I did NOT commit `.env`, API keys, `data/index/`, or experiment results.
