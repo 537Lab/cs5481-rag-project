@@ -27,6 +27,16 @@
 | YYYY-MM-DD | T3 |  |  |  |  | # |
 ```
 
+## 组员追加记录
+
+| 日期 | 任务包 | AI / Agent 名称 | 具体用途 | 我亲自复核了什么 | 我亲自跑了哪些命令 | PR 号 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2026-11-14 | T4 | Qoder（编码 agent）辅写 | 辅写 `eval/metrics.py`、`eval/qa_set.csv` 的候选题目与 `eval/judge_protocol.md` 初稿，辅改 `eval/README.md`；未让 AI 写 gold 以外的实验数字 | 逐条比对 `qa_set.csv` 的 gold quote 确实来自 `data/raw/` 原文；确认 `metrics.py` 没硬编码任何命中率/正确率，`answer_correctness` 无 grades 时只输出 pending；确认引用结构校验未被当作正确性 | `python -m eval.metrics --help` / `validate` / `retrieval --hits 1,3` / `retrieval --chunking paragraph` / `mock-demo`；`ruff check .`；`pytest -o addopts="" -q`（含验收双文件） | 本 PR（分支 `t4-eval-qa-metrics`，待填号） |
+
+> 注：AI 辅写的 QA 题目仍须由**非作者的组员逐题校对原文**后才能当作正式 gold（gold 质量
+> 直接影响命中率与正确率的可信度）；`judge_protocol.md` 中规定 LLM 不得用于编写或审核
+> gold quote。本轮**零付费 API 调用**，`answer_correctness` 尚无数字（人评未开始）。
+
 ## 写报告时建议披露的句子（供参考，按实际情况改）
 
 > 本组使用 AI 编码助手辅助生成基础工程脚手架、单元测试与部分文档；所有代码由对应

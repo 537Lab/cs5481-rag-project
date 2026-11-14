@@ -412,3 +412,164 @@ GitHub Free + 私有仓库**不支持**强制分支保护 / Rulesets。按"不�
   `__pycache__`；`START_HERE.md` 等关键文档均在远端。
 - 本地 `git status --short` 为空（干净），`origin/main` 与本地 `main` 一致。
 - 本地全量测试最终状态：`57 passed, 2 skipped`；`ruff check .` 通过。
+
+---
+
+## 11. T4 评测集与指标（2026-11-14，组员实际执行）
+
+环境：Windows + 仓库内 `.venv`，`Python 3.13.5`（与第 1 节探测环境的 3.13.12 不同，
+为组员本机新建的 venv）。**零付费调用**：本节所有数字都来自本地 ONNX embedding +
+本地 Chroma，无需 `OPENAI_API_KEY`。索引沿用第 9 节 `cli ingest` 建立的
+`chunks_fixed`（4 docs → 28 chunks），T4 未重新入库。
+
+交付：`eval/qa_set.csv`（35 条）、`eval/metrics.py`、`eval/judge_protocol.md`、
+`tests/test_eval_metrics.py`，并把 `eval/README.md` 从「只有定义、尚无实现」改写为
+「定义 + T4 实现说明」。
+
+### 11.1 验收命令（真实执行）
+
+```
+$ python -m eval.metrics --help
+usage: python -m eval.metrics [-h] [--config CONFIG] {validate,retrieval,score,mock-demo} ...
+CS5481 Topic 5 T4: QA set validation and evaluation metrics
+
+$ python -m eval.metrics validate
+exit=0
+[REAL] validated qa_set.csv: 35 items (27 answerable, 8 unanswerable)
+documents consulted: 4; all 27 gold quotes resolve to a source character span
+  bm25_wikipedia               4 answerable items
+  rag_wikipedia               10 answerable items
+  vector_db_wikipedia          8 answerable items
+  word_embedding_wikipedia     5 answerable items
+gold span sample (strategy-independent):
+  A01 rag_wikipedia chars 0-165
+  A02 rag_wikipedia chars 166-255
+  A03 rag_wikipedia chars 580-689
+unanswerable absence checks: 10 tokens confirmed absent from the corpus
+
+$ python -m pytest -o addopts="" -q tests/test_eval_metrics.py tests/test_eval_evidence.py
+exit=0
+45 passed in 0.37s
+
+$ python -m ruff check .
+All checks passed!
+
+$ python -m pytest -o addopts="" -q
+exit=0
+96 passed, 2 skipped in 4.22s
+```
+
+> 注：`pyproject.toml` 里 `addopts = "-q"`，命令行再写 `-q` 等于 `-qq`，pytest 会
+> **省略最后那行汇总**（只剩进度点）。上面的记录用 `-o addopts=""` 让汇总行显式出现；
+> 不加该参数时命令同样 `exit=0`，只是看不到计数行。
+
+### 11.2 REAL 检索命中率（真实执行，两轮结果一致）
+
+```
+$ python -m eval.metrics retrieval --hits 1,3 --min-coverage 0.5 --out eval/results/retrieval_fixed.json
+exit=0
+[REAL] retrieval evaluation: real corpus / real embeddings / real Chroma index
+    collection : chunks_fixed (chunks=28)
+    embedding  : local dim=384
+    hit@k      : levels (1, 3), min_coverage=0.5
+
+[REAL] retrieval metrics
+  min_coverage               0.5
+  n_items                    35
+  n_answerable               27
+  n_unanswerable             8
+  hit@1                       16/27  0.5926
+  hit@3                       23/27  0.8519
+
+wrote eval\results\retrieval_fixed.json
+```
+
+同一条命令连跑两轮得到完全相同的 `16/27` 与 `23/27`，命中率对本地 embedding 是
+确定性的。`eval/results/` 已在 `.gitignore` 中，结果文件不入库；报告引用时需同时
+写明上面的命令与 `--min-coverage 0.5`。结果 JSON 自带 provenance：
+
+```json
+{
+ "command": "python -m eval.metrics retrieval --hits 1,3 --min-coverage 0.5 --out eval/results/retrieval_fixed.json",
+ "config": {"corpus_manifest": "data/raw/manifest.json", "chunking": "fixed",
+            "chunk_size": 600, "chunk_overlap": 80, "collection": "chunks_fixed",
+            "embedding": "local:384d", "llm_model": "gpt-4o-mini",
+            "qa_items": 35, "python": "3.13.5"}
+}
+```
+
+### 11.3 top-3 未命中的真实失败案例（供 T2/T5 分析）
+
+`first_hit_rank` 分布：rank1 = 16、rank2 = 5、rank3 = 2、top-3 内未命中 = 4（合计 27）。
+四个未命中逐个回查了索引中的块边界与实际排名（`retrieve(k=8)`）：
+
+| qid | 问题 | gold span | 能完全覆盖的块 | 该块真实排名 | 定性 |
+| --- | --- | --- | --- | --- | --- |
+| A03 | When was RAG first proposed? | `rag_wikipedia` 580–689（109 字） | `rag_wikipedia#0001`（518–1113，覆盖率 1.0） | **6**（score 0.3588） | 排序问题；top-3 只拿到部分覆盖的 `#0000`（0.1651） |
+| A14 | goal when feature vectors are computed from raw data? | `vector_db_wikipedia` 1170–1263（93 字） | `vector_db_wikipedia#0002`（1035–1635，1.0） | **4** | 差一名，top_k=4 就能命中 |
+| A17 | at query time, what is computed from the user's prompt? | `vector_db_wikipedia` 2905–3040（135 字） | `vector_db_wikipedia#0005`（2584–3179，1.0） | **8** | 纯排序问题，目标块根本不在前列 |
+| A18 | after retrieval, how does the LLM use the documents? | `vector_db_wikipedia` 3041–3221（180 字，跨块边界） | **没有单块完全覆盖**；`#0005` 0.7667 / `#0006` 0.6778 | 两者均不在 top-3 | 边界切开 + 排序双重问题 |
+
+结论（写报告时按这个口径，不要笼统归因）：
+
+- 四个 miss 中只有 A18 真正反映了**分块边界**问题；A03/A14/A17 的目标块本身完整存在、
+  覆盖率 1.0，只是没进 top-3，属于**语义排序**问题，与 chunking 策略无关，换 `paragraph`
+  不一定会好。
+- A18 也说明了为什么 hit 用 `evidence_coverage >= 0.5` 而不是「块必须包含整个 gold span」：
+  被切成 0.77 / 0.68 两块的句子，任一块都仍然包含足够语义。
+- **分数不能当取舍依据**（对 T3 直接有用，均取自本轮 `retrieval_fixed.json` 的实记数据）：
+  四个未命中查询的 top-3 score 为 `0.3932–0.5770`，而 A03/A14/A17 真正含证据的块
+  score 只有 `0.3135–0.3588`；16 个 hit@1 查询的 top-1 score 区间为 `0.3450–0.8338`，
+  27 题全部 top-3 score 区间为 `0.1934–0.8338`。三个区间相互重叠，所以加 score 阈值
+  不会把证据捞回来；提高 top_k（A14 只差一名，在 rank 4）或加关键词混合检索才是方向。
+
+### 11.4 策略切换的空索引护栏（真实执行，预期失败）
+
+```
+$ python -m eval.metrics retrieval --chunking paragraph
+exit=2
+Collection 'chunks_paragraph' is empty. Run: python -m ragkit.cli ingest (or pass --chunking paragraph)
+```
+
+collection 名由 `Settings.collection_name` 按策略派生（`chunks_<strategy>`），所以
+`--chunking paragraph` 不会读到 fixed 的索引，两种策略的数据不混。段落策略的索引
+**本机尚未建立**，因此本节没有 paragraph 的命中率——那是 T2 的实验。
+
+### 11.5 MOCK 端到端（明确标注，不得写进报告）
+
+```
+$ python -m eval.metrics mock-demo --hits 1,3
+exit=0
+==============================================================================
+[MOCK] metric code exercise: fixtures + scripted doubles. NOT an experiment.
+==============================================================================
+[MOCK] answers metrics
+  min_coverage               0.5
+  n_items                    3
+  n_answerable               2
+  n_unanswerable             1
+  false_abstention_rate        0/2   0.0000
+  correct_abstention_rate      1/1   1.0000
+  citation_structure_rate      2/2   1.0000
+  answer_correctness           2/2   1.0000
+  n_graded                   2
+  hit@1                        1/2   0.5000
+  hit@3                        2/2   1.0000
+
+These numbers describe MOCK fixtures only. Do not put them in the report.
+```
+
+这里的 `answer_correctness` 来自脚本化的 `grades={...: "correct"}`，属于双组件自测，
+**不是**评测结果；只用于证明指标算式和 CLI 接线在离线环境可跑。
+
+### 11.6 本轮明确未执行
+
+- `python -m eval.metrics score --outputs ...`：**未真实执行**。它需要 T5 产出的
+  `eval/results/run.json`，目前不存在。该路径由 `tests/test_eval_metrics.py` 用合成
+  记录覆盖（含"结构校验通过但正确率为 0"的反例），加上上面的 MOCK 端到端。
+- **人工 judge 尚未开始**，`eval/judge_protocol.md` 只是协议。因此
+  **`answer_correctness` 目前没有任何数字**，不是 0，也不是待填占位，就是尚未测定；
+  `metrics.py` 在没有 `--grades` 时输出 `"pending human grading"`。
+- LLM-as-judge：**未执行**（无密钥、未经全组确认费用），条件见 `judge_protocol.md` §4。
+- `paragraph` 策略的命中率：**未测定**（本机无该 collection）。
+- 评分者一致性（raw agreement / Cohen's kappa）：**未计算**，需要两份人评 grades 文件。
