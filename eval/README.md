@@ -1,8 +1,11 @@
-# Evaluation format — DEFINITION + SHARED STANDARD ONLY (no experiment yet)
+# Evaluation format and shared standard
 
-This directory defines the format and the metric definitions the team will use
-later. It deliberately contains **no results, no scores, and no 20-item test
-set**. Filling it in is a separate task (T4).
+This directory defines the format, the metric definitions and the result-submission
+policy the team will use. It currently contains **no results, no scores, and no
+20-item test set**: the 20+ real QA pairs and the metrics script belong to T4,
+the chunking comparison to T2. Real, reproducible summaries are committed under
+[`results/summary/`](results/summary/) once those tasks deliver — see
+"Output location" below.
 
 ## What the assignment requires
 
@@ -12,7 +15,7 @@ set**. Filling it in is a separate task (T4).
 - Report **retrieval hit rate** and **answer correctness**.
 - Answers must cite sources, and the system must abstain when there is no answer.
 
-## Fix applied in v1.1: chunk ids must NOT be gold labels
+## Gold labels are verbatim quotes, not chunk ids
 
 `chunk_id` is an **output** of a chunking strategy. `fixed` vs `paragraph`, or
 two different chunk sizes, produce different ids and different boundaries for
@@ -81,16 +84,37 @@ Report each metric **per chunking strategy**, using the same QA set, same top-k,
 same `min_coverage`, same embedding model and same LLM. Otherwise the
 comparison is meaningless.
 
+## Frozen inputs (T1 → T4)
+
+Formal numbers are only meaningful once the inputs are frozen. `CORPUS_V0`
+(the 4 committed documents) is frozen for development only and is **not** the
+formal experiment corpus. T4's `qa_set.csv` gold quotes must be verbatim
+substrings of the corpus frozen by T1, and every strategy comparison must use
+the same frozen `qa_set.csv`. No temporary gold file exists (in particular there
+is no `tests/fixtures/gold_v0.csv`). See [`docs/TASKS.md`](../docs/TASKS.md)
+for the full freeze rules and dependency order.
+
 ## Output location and honesty rules
 
-Write results to `eval/results/` (gitignored). With every result file, record
-the exact command, config, strategy, model and date. Never fabricate numbers,
-never paste a MOCK output into a result, and never commit a result for a run
-that did not happen.
+- **Do commit**: real, reproducible aggregate metrics, charts, config snapshots
+  and a run manifest under [`results/summary/`](results/README.md).
+- **Do not commit**: raw per-item outputs, logs and caches under
+  `eval/results/raw/` (gitignored), MOCK outputs, AI-invented numbers, or any
+  result for a run that did not happen.
+- Every summary must record the exact command, config, strategy, model, date,
+  executor and the T1/T4 frozen snapshot ids so a reviewer can recompute it.
+  Full submission rules are in [`results/README.md`](results/README.md).
+- Development runs on `CORPUS_V0` / MOCK fixtures must be labelled as such and
+  must never be reported as formal experiment results.
+
+Never fabricate numbers and never call `verify_citation_structure()` result
+"answer correctness".
 
 ## Intentionally NOT here yet
 
 - The 20+ real QA pairs and their gold quotes (T4).
-- The scoring script, comparison table, charts or any number (T4).
+- The scoring script and any comparison table or number (T4).
 - The chunking comparison experiment itself (T2).
+- Any committed summary metrics or charts — only the empty
+  `results/summary/` placeholder exists so far.
 - Any chunk-size / overlap tuning, or paid LLM-as-judge calls.

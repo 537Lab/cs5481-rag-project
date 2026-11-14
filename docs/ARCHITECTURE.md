@@ -1,6 +1,11 @@
-# 架构与协作契约（基础工程 v1）
+# 架构与技术设计
 
-本文是**全组共享的技术约定**。改动本文或 `ragkit/contracts.py` 属于"影响所有人"的变更，需要 ≥2 人 review。
+本文是**全组共享的技术约定**：数据契约、模块边界、引用与校验机制、技术取舍和基线验收清单。
+协作流程本身见 [`CONTRIBUTING.md`](../CONTRIBUTING.md)，新组员操作见 [`START_HERE.md`](../START_HERE.md)，
+任务划分见 [`TASKS.md`](TASKS.md)。
+
+> 本文的技术取舍在 bootstrap 阶段拟定，**尚未经五名组员共同确认**；五人开工时应共同复核。
+> 改动本文或 `ragkit/contracts.py` 属于「影响所有人」的变更，需要 ≥2 人 review。
 
 ---
 
@@ -14,11 +19,9 @@
 | 硬性红线 | **单独一页**写明每人贡献比例 + **全体成员签名**（位于 slides 之前），缺页或缺签名直接 desk reject |
 | Topic 5 要求 | ① 加载/分块/embedding，**比较 ≥2 种 chunking 策略**并报告对检索质量的影响；② 向量数据库存 chunk + 向量；③ 问题转向量做语义检索；④ LLM 只用给定上下文作答、**每条论断标注来源文档与 chunk**、无答案时明确拒答；⑤ **≥20 组 QA**，报告检索命中率与回答正确率 |
 
-协作流程从第一天就要规范，因为 PR 历史就是第 4 条"贡献比例"的证据。
-
 ---
 
-## 2. 技术取舍（已与全组确认的 4 个决定）
+## 2. 技术取舍（bootstrap 阶段拟定，待五人共同确认）
 
 | # | 决定 | 选择 | 放弃了什么 / 代价 |
 | --- | --- | --- | --- |
@@ -29,7 +32,9 @@
 | D5 | 检查与合并 | `ruff` + `pytest` + GitHub Actions（离线、不需要密钥），绿灯 + ≥1 review 才能合并 | 放弃"只本地手工测"的轻流程。代价：PR 要等 CI |
 | D6 | 框架 | **不用** LangChain / LlamaIndex | 它们把分块、检索、prompt 塞进一条链，正好掩盖五个模块的边界，也不利于把 methodology 讲清楚 |
 
-D2/D3/D4/D5 是开工前由全组确认的决定。后续若要改（例如换 pgvector、换全本地模型），必须新开 PR 并说明对每人环境的影响。
+以上 6 项是 bootstrap 阶段为使五人能立即开工而做的**暂定选择**，尚未征求另外四名组员的意见，
+不能表述为「全组已确认」。五人开工时应共同复核；此后若要改（例如换 pgvector、换全本地模型），
+必须新开 PR 并说明对每人环境的影响。
 
 **为什么契约用 `@dataclass` 而不是 dict**：五个人并行开发时，字段名是最容易对不上的地方。把所有跨模块类型集中在 `ragkit/contracts.py`，配合 `Protocol` 接口，任何人不看别人代码也知道自己该返回什么。
 
@@ -94,7 +99,7 @@ Document -> Chunk -> (Chunk + vector) -> RetrievedChunk -> Answer
 
 通过后才生成 `Citation`，其 `quote` 是该 chunk 原文前 200 字符（逐字）。
 
-### 三层概念必须分开（v1.1 修正）
+### 三层概念必须分开
 
 | 层 | 判据 | 函数 | 能证明什么 |
 | --- | --- | --- | --- |
@@ -126,34 +131,36 @@ Document -> Chunk -> (Chunk + vector) -> RetrievedChunk -> Answer
 | 真实 E2E | `tests/test_e2e_real.py` | 标 `pytest.mark.real`，默认 skip；需 `RUN_REAL_E2E=1`，LLM 测试还需密钥 |
 | 运行记录 | `RUNLOG.md` | 命令 + 原始输出 + 时间；未执行的命令明确写"未执行" |
 
-**禁止**：把 MOCK 输出写进报告、把模拟数字当实验结果、伪造"已运行成功"、在 `src` 里塞未被标注的假实现。
+**禁止**：把 MOCK 输出写进报告、把模拟数字当实验结果、伪造"已运行成功"、在生产代码里塞未被标注的假实现。
 
 ---
 
-## 7. 第一版验收标准（可逐条实测）
+## 7. 基线验收清单（可逐条实测）
 
 1. 干净环境 `python -m venv .venv && pip install -r requirements-dev.txt` 成功。
 2. **不配置任何密钥**时 `python -m pytest -q` 全绿；真实 E2E 显示为 skipped 并注明原因。
 3. `ruff check .` 通过。
-4. `python -m ragkit.cli offline-demo` 打印带 `[doc_id#chunk_id]` 的引用答案 + 两个拒答案例，顶部有 MOCK 横幅。
+4. `python -m ragkit.cli offline-demo` 打印带 `[chunk_id]`（`doc_id#index` 形式）的引用答案 + 两个拒答案例，顶部有 MOCK 横幅。
 5. `python -m ragkit.cli ingest` 用**真实语料 + 真实本地 embedding + 真实 Chroma** 成功，输出文档数与 chunk 数。
 6. `python -m ragkit.cli retrieve "..."` 能返回带出处与原文片段的 top-k，且 chunk id 可被 `store.get_chunk()` 回查。
 7. 有 `OPENAI_API_KEY` 时 `cli ask` 能生成带可验证引用的答案；**本次若无凭据则如实记录"未执行"**。
 8. 五个模块各自只 import 声明的依赖；`contracts.py` 零第三方依赖。
-9. 仓库内 grep 不到 `sk-` 形态密钥，`.env` / `data/index/` / `eval/results/` 均被 gitignore。
+9. 仓库内 grep 不到 `sk-` 形态密钥；`.env` / `data/index/` / `eval/results/raw/` 被 gitignore，
+   而 `eval/results/summary/` 中的真实可复现汇总结果按 [`eval/README.md`](../eval/README.md) 提交。
 10. `RUNLOG.md` 记录真实命令 + 原始输出，明确区分 MOCK 与 REAL。
-11. （v1.1）`eval/qa_template.csv` **不含** `expected_chunk_ids`；gold 用 `evidence_doc_id` + `evidence_quote`，`pytest tests/test_eval_evidence.py -q` 通过。
-12. （v1.1）结构校验与事实正确性在代码命名、CLI 输出、测试与文档中明确区分。
-13. （v1.1）`fixed` 与 `paragraph` 都真正应用 `overlap`，且 `chunk_overlap_actual` 等于实际字符重叠数。
+11. `eval/qa_template.csv` **不含** `expected_chunk_ids`；gold 用 `evidence_doc_id` + `evidence_quote`，`pytest tests/test_eval_evidence.py -q` 通过。
+12. 结构校验与事实正确性在代码命名、CLI 输出、测试与文档中明确区分。
+13. `fixed` 与 `paragraph` 都真正应用 `overlap`，且 `chunk_overlap_actual` 等于实际字符重叠数。
 
 对应命令与实际结果见根目录 `RUNLOG.md`。
 
 ---
 
-## 8. 这一版明确不做（留作后续 PR）
+## 8. 当前基线未覆盖的内容（后续 PR）
 
 - 20 组正式 QA 及其 gold 证据引文（共同证据标准已定义在 `eval/README.md` + `eval/evidence.py`；`qa_template.csv` 目前只有 2 行格式示例）。
-- 两种 chunking 的对比实验、命中率 / 正确率 / 拒答率的数字与图表。
+- 两种 chunking 的对比实验、命中率 / 正确率 / 拒答率数字；真实、可复现的结果与图表按
+  [`eval/README.md`](../eval/README.md) 的规范提交，不预先写入仓库。
 - 评测脚本、LLM-as-judge、检索阈值调参、chunk size/overlap 网格搜索。
 - 最终版 prompt 工程、reranking、hybrid search、UI、报告与 slides。
 - 把语料扩到课程讲义 PDF、引入 pypdf / OCR。
