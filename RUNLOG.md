@@ -5,8 +5,9 @@
 记录原则：
 
 - **区分执行主体**：本地命令由 AI Agent 在 bootstrap / 整理阶段代为执行；GitHub Actions 的结果来自云端
-  runner。两者都不是「组长亲自运行」，也不等于人工复核。人工复核情况以
+  runner。两者都不是「任何组员亲自运行」，也不等于人工复核。人工复核情况以
   [`docs/DEV_LOG.md`](docs/DEV_LOG.md) 和 [`docs/AI_USAGE.md`](docs/AI_USAGE.md) 为准。
+- 项目定义、老师要求映射与交付标准见 [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md)。
 - MOCK（模拟）与 REAL（真实端到端）严格分开；不把 MOCK 输出当实验结果，不硬编码任何命中率 /
   正确率数字，不伪造「运行成功」。
 - 本机网络、代理、临时目录等**个人环境排障**不属于团队共享信息，不写入本文件（已在本地归档）。
@@ -203,5 +204,68 @@ git grep -nE 'OPENAI_API_KEY\s*=\s*\S+'            -> 无命中（.env.example �
 | 两种 chunking 对比实验、命中率 / 正确率 / 拒答率、图表 | **未做** | T2 / T4；真实可复现结果的提交规范见 `eval/README.md` |
 | 评测脚本、judge、阈值调参、rerank、UI、报告与 slides | **未做** | 后续 PR |
 | 付费 LLM API 调用 | **零次** | 需先由全组确认费用方案 |
-| 正式语料扩充与冻结快照 | **未做** | T1；冻结规则见 `docs/TASKS.md` |
+| 正式语料扩充与冻结快照 | **未做** | T1；冻结规则见 `docs/PROJECT_PLAN.md` §6.6 |
 | 四名组员的开发贡献 | **尚无** | 仓库为私有，尚未邀请 Collaborator；见 `CONTRIBUTING.md` 第 1 节 |
+
+---
+
+## 6. 项目定义与协作计划定稿（2026-11-14，本轮，由 AI Agent 执行）
+
+范围：只改文档与 GitHub Issues。**未修改 `ragkit/` 任何核心模块、未生成语料 / QA / 实验结果、
+未执行任何付费 API 调用。** 变更清单见对应 PR。
+
+### 6.1 文档相对链接与锚点检查
+
+```
+$ python3 .tmp/check_links.py
+markdown files: 13 | relative links checked: 67
+OK: all relative links and anchors resolve
+LINK_EXIT=0
+```
+
+### 6.2 身份标签与过时引用扫描
+
+```
+$ git grep -n -E '组[.]?长|gold[_]?v0' -- .
+NONE
+```
+
+（模式用字符类写成 `组[.]?长` / `gold[_]?v0`，以便本行自身不被匹配；等价于扫描
+「预设身份标签」与「不存在的旧文件名」。）
+
+### 6.3 密钥形态扫描（与 CI 同规则）
+
+```
+$ git grep -nE 'sk-[A-Za-z0-9]{16,}' -- . ':!*.md'
+NONE
+```
+
+### 6.4 未能在本机执行的检查（如实记录）
+
+```
+$ .venv/bin/ruff check --no-cache .
+blocked: 本机沙箱禁止写入/删除临时目录（ruff 无法落临时文件），未得到检查结论
+
+$ .venv/bin/python -m pytest -q
+blocked: tempfile 无法找到可用临时目录（同一沙箱限制），未得到测试结论
+```
+
+- 这两项**不是通过**，也**不是失败**，而是本机环境限制导致未执行。
+- 本轮**没有改动任何 `.py` 文件**，因此预期不影响现有 57 passed / 2 skipped；
+  最终以 PR 的 GitHub Actions `ci / check`（ruff + 离线 pytest + 密钥扫描）为准。
+- 不使用 MOCK 或推测结果替代真实运行。
+
+### 6.5 GitHub Issues 同步
+
+```
+$ gh issue list --state open
+#1 [T1] 正式知识库与文档处理              assignees: []
+#2 [T2] Chunking 策略与对比实验            assignees: []
+#3 [T3] 检索层与向量库                     assignees: []
+#4 [T4] 评测集、指标实现与评分协议          assignees: []
+#5 [T5] LLM 问答、引用支持性与可运行演示     assignees: []
+```
+
+五个 Issue 的正文已与 `docs/PROJECT_PLAN.md`、`docs/TASKS.md` 对齐：移除预设身份标签，
+删除对不存在的旧 gold 文件（`tests/fixtures/` 下）的依赖，补上 T4 对 T1 冻结语料的依赖，
+并明确 T4 是唯一指标实现。

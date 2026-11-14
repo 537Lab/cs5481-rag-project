@@ -1,5 +1,8 @@
 # 实验结果：保存与提交规范
 
+> 项目定义、老师要求映射、五个任务、依赖排期与交付标准统一见
+> [`docs/PROJECT_PLAN.md`](../../docs/PROJECT_PLAN.md)；本文件只规定结果怎么存、怎么提交。
+
 ## 原则
 
 **不伪造数据**，但也不一概禁止结果进仓库。真实、可复现的**汇总指标、图表和实验配置**
@@ -35,7 +38,7 @@ eval/results/
 2. **配置可复现**：`config.json` 记录 `strategy` / `size` / `overlap` / `top_k` /
    `min_coverage` / embedding 模型 / LLM 与 temperature 等，并注明所依据的
    **T1 冻结语料快照标识**与 **T4 冻结 `qa_set.csv` 标识**（冻结规则见
-   [`docs/TASKS.md`](../../docs/TASKS.md)）。
+   [`docs/PROJECT_PLAN.md` §6.6](../../docs/PROJECT_PLAN.md)）。
 3. **数字可追溯**：`metrics.json` 的每个指标都能由 `raw/` 输出或 `run.md` 中的命令重算。
    禁止硬编码、禁止手写「已运行成功」、禁止把结构校验率称作回答正确率。
 4. **同一基准**：同一组对比必须使用同一评测集、同一 `top_k`、`min_coverage`、embedding 与 LLM。

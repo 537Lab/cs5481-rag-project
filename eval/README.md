@@ -1,19 +1,25 @@
 # Evaluation format and shared standard
 
-This directory defines the format, the metric definitions and the result-submission
+This directory defines the QA format, the metric definitions and the result-submission
 policy the team will use. It currently contains **no results, no scores, and no
-20-item test set**: the 20+ real QA pairs and the metrics script belong to T4,
-the chunking comparison to T2. Real, reproducible summaries are committed under
+20-item test set**: the 20+ real QA pairs and the single metrics implementation belong
+to T4, the chunking comparison to T2. Real, reproducible summaries are committed under
 [`results/summary/`](results/summary/) once those tasks deliver — see
 "Output location" below.
 
+The project's single source of truth for background, goals, the item-by-item mapping
+of the instructor's requirements, the five tasks, the dependency/integration schedule
+and the final deliverables is [`docs/PROJECT_PLAN.md`](../docs/PROJECT_PLAN.md).
+This file only defines evaluation format and metric semantics.
+
 ## What the assignment requires
 
-- At least **20 question-answer pairs**.
-- Compare **at least two chunking strategies** and report their impact on
-  retrieval quality.
-- Report **retrieval hit rate** and **answer correctness**.
-- Answers must cite sources, and the system must abstain when there is no answer.
+See [`docs/PROJECT_PLAN.md` §3](../docs/PROJECT_PLAN.md) for the verbatim requirements
+and their current coverage. In short: at least **20 question-answer pairs**, a
+comparison of **at least two chunking strategies** with its impact on retrieval
+quality, **retrieval hit rate** and **answer correctness**, cited sources, and explicit
+abstention when the knowledge base has no answer. Passing unit tests does not satisfy
+any of these by itself.
 
 ## Gold labels are verbatim quotes, not chunk ids
 
@@ -62,7 +68,12 @@ check. It **cannot** prove level 3, and it must never be reported as "answer
 correctness" or "factual verification". `verify_citations()` is a backwards
 compatible alias of that structural check.
 
-## Metric definitions (agree before writing code)
+## Metric definitions — ONE implementation, owned by T4
+
+`eval/metrics.py` (T4) is the **only** implementation of these metrics. T2, T3 and
+T5 must import it; nobody re-implements hit@k, correctness or abstention rates in
+their own script. `eval/evidence.py` stays the shared predicate layer
+(`locate_evidence`, `evidence_coverage`, `is_retrieval_hit`).
 
 - **Retrieval hit rate** = (# answerable questions where `is_retrieval_hit(top_k,
   span, min_coverage)` is True) / (total answerable questions). Report hit@1 and
@@ -84,15 +95,21 @@ Report each metric **per chunking strategy**, using the same QA set, same top-k,
 same `min_coverage`, same embedding model and same LLM. Otherwise the
 comparison is meaningless.
 
-## Frozen inputs (T1 → T4)
+## Frozen inputs and who consumes what
 
 Formal numbers are only meaningful once the inputs are frozen. `CORPUS_V0`
 (the 4 committed documents) is frozen for development only and is **not** the
-formal experiment corpus. T4's `qa_set.csv` gold quotes must be verbatim
-substrings of the corpus frozen by T1, and every strategy comparison must use
-the same frozen `qa_set.csv`. No temporary gold file exists (in particular there
-is no `tests/fixtures/gold_v0.csv`). See [`docs/TASKS.md`](../docs/TASKS.md)
-for the full freeze rules and dependency order.
+formal experiment corpus unless the group explicitly falls back to it
+(see [`docs/PROJECT_PLAN.md` §6.2](../docs/PROJECT_PLAN.md)). T4's `qa_set.csv`
+gold quotes must be verbatim substrings of the frozen corpus snapshot, and every
+strategy comparison must use the same frozen `qa_set.csv`.
+
+The shared artifacts and their owners are defined in
+[`docs/PROJECT_PLAN.md` §6.1](../docs/PROJECT_PLAN.md): I1 corpus snapshot (T1),
+I2 `qa_set.csv` schema (T4), I3 `metrics.py` signatures (T4),
+I4 `eval/answers/<run_id>.jsonl` answer artifacts (T5), I5 config/result schema
+(T2 + T4). Freeze points and the T1 → T4 time-box are in
+[`docs/PROJECT_PLAN.md` §6.6](../docs/PROJECT_PLAN.md).
 
 ## Output location and honesty rules
 
@@ -113,8 +130,12 @@ Never fabricate numbers and never call `verify_citation_structure()` result
 ## Intentionally NOT here yet
 
 - The 20+ real QA pairs and their gold quotes (T4).
-- The scoring script and any comparison table or number (T4).
+- `eval/metrics.py` and any comparison table or number (T4).
 - The chunking comparison experiment itself (T2).
+- `eval/answers/<run_id>.jsonl` answer artifacts (T5).
 - Any committed summary metrics or charts — only the empty
   `results/summary/` placeholder exists so far.
 - Any chunk-size / overlap tuning, or paid LLM-as-judge calls.
+
+What each of these must produce, and by when, is in
+[`docs/PROJECT_PLAN.md` §6.5](../docs/PROJECT_PLAN.md).
