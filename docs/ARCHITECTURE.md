@@ -1,27 +1,25 @@
 # 架构与技术设计
 
 本文是**全组共享的技术约定**：数据契约、模块边界、引用与校验机制、技术取舍和基线验收清单。
-协作流程本身见 [`CONTRIBUTING.md`](../CONTRIBUTING.md)，新组员操作见 [`START_HERE.md`](../START_HERE.md)，
-任务划分见 [`TASKS.md`](TASKS.md)。
+项目背景、目标、老师要求逐项映射、五个任务、依赖排期与交付标准的**唯一来源**是
+[`PROJECT_PLAN.md`](PROJECT_PLAN.md)；本文件不重复这些定义。
+协作规则见 [`CONTRIBUTING.md`](../CONTRIBUTING.md)，上手步骤见 [`START_HERE.md`](../START_HERE.md)，
+任务卡见 [`TASKS.md`](TASKS.md)。
 
-> 本文的技术取舍在 bootstrap 阶段拟定，**尚未经五名组员共同确认**；五人开工时应共同复核。
-> 改动本文或 `ragkit/contracts.py` 属于「影响所有人」的变更，需要 ≥2 人 review。
-
----
-
-## 1. 从课程说明确认的硬约束
-
-| 项 | 内容 |
-| --- | --- |
-| 截止 | 2026-11-24（周二）23:59 |
-| 交付 | Canvas 提交报告 + 源码（`.py` 或 `.ipynb`）+ 15 分钟课堂展示 |
-| 报告 | 至少 introduction / methodology / experiments and discussions；正文 ≤6 页，参考文献与附录不限；slides 附在报告末尾 |
-| 硬性红线 | **单独一页**写明每人贡献比例 + **全体成员签名**（位于 slides 之前），缺页或缺签名直接 desk reject |
-| Topic 5 要求 | ① 加载/分块/embedding，**比较 ≥2 种 chunking 策略**并报告对检索质量的影响；② 向量数据库存 chunk + 向量；③ 问题转向量做语义检索；④ LLM 只用给定上下文作答、**每条论断标注来源文档与 chunk**、无答案时明确拒答；⑤ **≥20 组 QA**，报告检索命中率与回答正确率 |
+> 技术取舍仍需五人共同确认；改动本文、`PROJECT_PLAN.md` 或 `ragkit/contracts.py`
+> 属于「影响所有人」的变更，需要 ≥2 人 review。
 
 ---
 
-## 2. 技术取舍（bootstrap 阶段拟定，待五人共同确认）
+## 1. 课程要求的对应关系
+
+老师明文要求、推断的考察重点、自愿增加的质量目标，以及每一项的现有实现 / 剩余工作 /
+验收标准 / 展示证据，统一见 [`PROJECT_PLAN.md` §3](PROJECT_PLAN.md)。
+本文只保留与架构直接相关的技术取舍，避免形成第二套项目定义。
+
+---
+
+## 2. 技术取舍
 
 | # | 决定 | 选择 | 放弃了什么 / 代价 |
 | --- | --- | --- | --- |
@@ -32,9 +30,9 @@
 | D5 | 检查与合并 | `ruff` + `pytest` + GitHub Actions（离线、不需要密钥），绿灯 + ≥1 review 才能合并 | 放弃"只本地手工测"的轻流程。代价：PR 要等 CI |
 | D6 | 框架 | **不用** LangChain / LlamaIndex | 它们把分块、检索、prompt 塞进一条链，正好掩盖五个模块的边界，也不利于把 methodology 讲清楚 |
 
-以上 6 项是 bootstrap 阶段为使五人能立即开工而做的**暂定选择**，尚未征求另外四名组员的意见，
-不能表述为「全组已确认」。五人开工时应共同复核；此后若要改（例如换 pgvector、换全本地模型），
-必须新开 PR 并说明对每人环境的影响。
+以上 6 项是为使五人能立即开工而做的技术选择，需由五人共同复核，不能表述为「全组已确认」。
+此后若要改（例如换 pgvector、换全本地模型），必须新开 PR 并说明对每人环境的影响。
+架构如何对应 Topic 5 的后端管线与答案保真重点，见 [`PROJECT_PLAN.md` §4](PROJECT_PLAN.md)。
 
 **为什么契约用 `@dataclass` 而不是 dict**：五个人并行开发时，字段名是最容易对不上的地方。把所有跨模块类型集中在 `ragkit/contracts.py`，配合 `Protocol` 接口，任何人不看别人代码也知道自己该返回什么。
 
@@ -157,6 +155,9 @@ Document -> Chunk -> (Chunk + vector) -> RetrievedChunk -> Answer
 ---
 
 ## 8. 当前基线未覆盖的内容（后续 PR）
+
+对应五个任务与交付标准见 [`PROJECT_PLAN.md` §3.2、§7](PROJECT_PLAN.md) 及 [`TASKS.md`](TASKS.md)。
+**单元测试通过不等于满足课程要求**：下面的缺口正是 R1d / R4 / R5 与 G3–G5 尚未完成的部分。
 
 - 20 组正式 QA 及其 gold 证据引文（共同证据标准已定义在 `eval/README.md` + `eval/evidence.py`；`qa_template.csv` 目前只有 2 行格式示例）。
 - 两种 chunking 的对比实验、命中率 / 正确率 / 拒答率数字；真实、可复现的结果与图表按

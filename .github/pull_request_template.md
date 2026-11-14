@@ -1,6 +1,8 @@
 ## What changed
 
-<!-- One or two sentences. Say WHICH module you touched (M1..M5 or shared). -->
+<!-- One or two sentences. Say WHICH module you touched (M1..M5 or shared).
+     Project definition, task cards and the dependency schedule:
+     docs/PROJECT_PLAN.md and docs/TASKS.md. -->
 
 ## Why
 

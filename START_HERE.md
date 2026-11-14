@@ -2,17 +2,18 @@
 
 **仓库**：https://github.com/537Lab/cs5481-rag-project （私有，默认分支 `main`）
 
-本文件只讲「怎么开始动手」。项目介绍看 [`README.md`](README.md)，协作规则看
-[`CONTRIBUTING.md`](CONTRIBUTING.md)，技术设计看 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)，
-任务定义看 [`docs/TASKS.md`](docs/TASKS.md)。
+本文件只讲「怎么开始动手」。**项目统一方案看 [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md)**
+（背景、目标、老师要求映射、架构、五个任务、排期与交付标准）；简明入口看 [`README.md`](README.md)；
+协作规则看 [`CONTRIBUTING.md`](CONTRIBUTING.md)；技术设计看
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)；任务卡看 [`docs/TASKS.md`](docs/TASKS.md)。
 
 ---
 
 ## 1. 先拿到权限
 
-仓库是私有的，需要组长先把你加为 Collaborator：
+仓库是私有的，需要有仓库管理员权限的组员把你加为 Collaborator：
 GitHub → 仓库 → `Settings` → `Collaborators` → `Add people` → 输入你的 GitHub 用户名。
-在邮箱里点 Accept 之后才能 clone 和 push。看不到仓库就找组长发邀请，不要换账号或让同学转发代码。
+在邮箱里点 Accept 之后才能 clone 和 push。看不到仓库就请管理员发邀请，不要换账号或让同学转发代码。
 
 ## 2. 克隆并跑通（复制粘贴即可）
 
@@ -55,7 +56,8 @@ python -m ragkit.cli retrieve "What is retrieval-augmented generation?" --top-k 
 
 ## 4. 认领任务
 
-任务清单：GitHub `Issues` 中的 T1–T5（带 `task` 标签），完整说明见 [`docs/TASKS.md`](docs/TASKS.md)。
+任务清单：GitHub `Issues` 中的 T1–T5（带 `task` 标签），完整说明见 [`docs/TASKS.md`](docs/TASKS.md)，
+依赖与排期见 [`docs/PROJECT_PLAN.md` §6](docs/PROJECT_PLAN.md)。五个任务均未认领，
 在对应 Issue 里评论认领、把 Assignee 设成自己，一人一个。
 
 使用 Coding Agent 时：
@@ -76,7 +78,7 @@ git checkout -b t3-retrieval-hitk          # 换成自己的分支名，前缀�
 python -m pytest -q && ruff check .         # 两条都要过
 
 git add <你改的文件>
-git commit -m "t3: add hit@k computation"
+git commit -m "t3: isolate collections per chunking strategy"
 git push -u origin t3-retrieval-hitk
 ```
 
@@ -86,7 +88,8 @@ git push -u origin t3-retrieval-hitk
 
 ## 6. 怎么判断任务做完了
 
-每个任务在 [`docs/TASKS.md`](docs/TASKS.md) 都有「验收命令」和「完成标准」。最低要求：
+每个任务在 [`docs/TASKS.md`](docs/TASKS.md) 都有「验收命令」和「完成标准」；全局的测试、实验、
+展示与交付标准见 [`docs/PROJECT_PLAN.md` §7](docs/PROJECT_PLAN.md)。最低要求：
 
 - 自己的测试：`python -m pytest tests/<你的测试文件>.py -q` 全绿；
 - 全量回归：`python -m pytest -q` 全绿；
@@ -101,5 +104,6 @@ git push -u origin t3-retrieval-hitk
 
 - **已可用**：基础流水线、离线测试、静态检查与云端 CI；真实语料 4 篇、本地 embedding、Chroma 入库与检索。
 - **尚未开展**（正是五个任务包的内容）：正式语料扩充、≥20 组 QA、两种 chunking 的对比实验、命中率 / 正确率 / 拒答率、回答正确性的 judge、真实 LLM 回答、报告与 slides。
-- 任务之间的依赖，以及 T1 正式语料、T4 正式评测集的冻结规则，见 [`docs/TASKS.md`](docs/TASKS.md)。
+- 老师要求的逐项覆盖情况、五个任务的依赖关系、冻结规则与最终交付标准，统一见
+  [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md)。
 - 逐条真实命令与原始输出见 [`RUNLOG.md`](RUNLOG.md)；开发记录见 [`docs/DEV_LOG.md`](docs/DEV_LOG.md)。

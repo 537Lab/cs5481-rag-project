@@ -1,32 +1,29 @@
 # CS5481 Topic 5 — Knowledge Base Q&A with Verifiable Citations
 
-一个最小可运行的检索增强问答（RAG）基线：读取公开授权文档，切块并向量化后写入本地向量库；
-检索返回带出处、许可与字符区间的片段；LLM 只用给定上下文作答，每条引用都能回查原文，
-证据不足时明确拒答。
+五人小组的课程项目。目标是把一组**公开、许可明确、版本固定**的官方文档建成知识库：
+用户提问后，系统检索原文片段，让 LLM 只用这些片段作答，每条论断附上可回查的
+「来源文档 + chunk + 逐字引文」；知识库里没有答案时明确拒答。重点在后端数据管线与
+答案保真机制，不是聊天界面。
 
-本仓库是五人小组的开发起点，不是最终作业。代码边界、数据契约和测试已固定，便于并行开发。
+> **项目方案（唯一定义）**：[`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md)
+> 包含背景与实际问题、目标与预期系统、老师原始要求逐项映射、技术架构与设计理由、
+> 五个并行任务、依赖与集成排期、测试 / 实验 / 展示 / 交付标准。
+> 应用领域、LLM 方案与任务认领仍需五人共同确认；五个任务目前均未认领。
 
-## 功能
+## 这个仓库现在有什么
 
-- **文档接入**：从 `manifest.json` 读取原文，一路携带 `source_uri` / `license` 出处信息。
-- **分块**：`fixed` 与 `paragraph` 两种基线策略，保持 `doc.text[char_start:char_end] == chunk.text` 不变式。
-- **向量化**：Chroma 内置的本地 ONNX `all-MiniLM-L6-v2`（384 维，无需密钥），或 OpenAI 兼容 API。
-- **存储与检索**：Chroma 嵌入式持久化，返回 `chunk_id`、相似度、出处与原文片段。
-- **生成与校验**：引用 ID 有效性 + 引文逐字性的**结构校验**（不等同于事实正确性）；编造引用、无引用或检索为空时拒答。
-- **评测约定**：`eval/` 定义与 chunking 策略无关的共同证据标准和指标口径。
-- **零配置演示**：`offline-demo` 用合成 fixture 与测试替身跑通全链路，输出带 MOCK 横幅。
+- **M1 文档接入**：`manifest.json` 读取原文，`source_uri` / `license` 随文档传递。
+- **M2 分块**：`fixed` 与 `paragraph` 两种最小策略，保持
+  `doc.text[char_start:char_end] == chunk.text` 不变式。
+- **M3 向量化**：Chroma 内置本地 ONNX `all-MiniLM-L6-v2`（384 维、开源、无需密钥），
+  或 OpenAI 兼容 embedding API。
+- **M4 存储检索**：Chroma 嵌入式持久化，返回 `chunk_id`、相似度、出处与原文片段。
+- **M5 生成校验**：引用 ID 有效性 + 引文逐字性的**结构校验**（不等于事实正确性）；
+  编造引用、无引用或检索为空时拒答。
+- **评测约定**：`eval/` 定义与分块策略无关的共同证据标准与指标口径。
+- **零配置演示**：`offline-demo` 用合成 fixture 跑通全链路，输出带 MOCK 横幅。
 
-## 技术栈
-
-| 层 | 选择 |
-| --- | --- |
-| 语言 / 配置 | Python 3.11+，标准库 `tomllib`，`config.toml` 存非敏感参数，`.env` 存密钥 |
-| 向量库 / Embedding | ChromaDB（嵌入式持久化），本地 ONNX MiniLM，或 OpenAI 兼容 embedding |
-| LLM | OpenAI 兼容接口（`OPENAI_API_KEY`，可用 `OPENAI_BASE_URL` 指向其他网关） |
-| 测试 / 检查 | `pytest`（离线单测 + 显式标记的 real 用例）、`ruff` |
-| CI | GitHub Actions：`ruff` + 离线 `pytest` + 提交内容密钥扫描 |
-
-不使用 LangChain / LlamaIndex；五个模块各自独立，便于分别开发和讲解。
+不使用 LangChain / LlamaIndex；五个模块各自独立，便于分别开发、测试和讲解。
 
 ## 安装与运行
 
@@ -52,28 +49,31 @@ python -m ragkit.cli ingest
 python -m ragkit.cli retrieve "What is retrieval-augmented generation?" --top-k 3
 ```
 
-首次 `ingest` 需联网下载约 80 MB 的本地模型到 `~/.cache/chroma`，之后完全离线。
-`cli ask` 需要 `OPENAI_API_KEY`：`cp .env.example .env` 后填入即可；`.env` 已被 gitignore。
-
-> 新组员请按 [`START_HERE.md`](START_HERE.md) 逐步操作；本机网络或环境差异请自行处理，
-> 不要把个人配置写进仓库。
+首次 `ingest` 需联网下载约 80 MB 本地模型到 `~/.cache/chroma`，之后完全离线。
+`cli ask` 需要 LLM API 配置：`cp .env.example .env` 后填入；`.env` 已被 gitignore。
+**任何付费 API 调用必须先由全组确认方案**，本仓库目前零付费调用。
 
 ## 当前状态
 
-- **已具备**：4 篇真实公开授权语料、基础流水线、离线测试、静态检查与云端 CI；真实入库与语义检索已跑通。
-- **尚未开展**：正式语料扩充、≥20 组正式 QA、chunking 对比实验、检索命中率 / 回答正确率、真实 LLM 回答、报告与演示。
-- 未产生任何正式实验结果，也没有产生付费 API 调用。
-
-逐条真实命令与输出见 [`RUNLOG.md`](RUNLOG.md)。
+- **已具备**：4 篇开发语料、基础流水线、离线测试（57 passed / 2 skipped）、静态检查与云端 CI；
+  真实入库与语义检索已跑通。
+- **尚未开展**：正式语料、≥20 组 QA、chunking 对比实验、命中率 / 正确率、真实 LLM 回答、
+  报告与 15 分钟展示。
+- **单元测试通过不等于满足课程要求**：逐项覆盖情况见
+  [`docs/PROJECT_PLAN.md` §3](docs/PROJECT_PLAN.md#3-老师原始要求及符合情况)。
+- 未产生任何正式实验结果；逐条真实命令与输出见 [`RUNLOG.md`](RUNLOG.md)。
 
 ## 协作入口
 
-| 文档 | 负责内容 |
+| 文档 | 一句话职责 |
 | --- | --- |
-| [`START_HERE.md`](START_HERE.md) | 新组员上手：权限、clone、跑通、认领任务、发第一个 PR |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | 协作规则：分支、PR、review、合并、禁止提交项 |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 技术设计：数据契约、模块边界、技术取舍、验收清单 |
-| [`docs/TASKS.md`](docs/TASKS.md) | T1–T5 任务包、语料/评测集冻结规则与依赖顺序 |
-| [`eval/README.md`](eval/README.md) | 评测格式、指标口径、实验结果的保存与提交规范 |
-| [`docs/DEV_LOG.md`](docs/DEV_LOG.md) / [`docs/AI_USAGE.md`](docs/AI_USAGE.md) | 开发记录与 AI 辅助披露（贡献声明依据） |
+| [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md) | **统一方案**：背景、目标、要求映射、架构、任务、排期、交付标准 |
+| [`docs/TASKS.md`](docs/TASKS.md) | T1–T5 详细任务卡（输入 / 输出 / 可改文件 / 测试 / 验收 / 演示） |
+| [`START_HERE.md`](START_HERE.md) | 新组员上手：clone、跑通、认领、发第一个 PR |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | 分支、PR、review、合并与禁止提交项 |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 数据契约、模块边界、引用三层与技术取舍 |
+| [`eval/README.md`](eval/README.md) | QA 格式、指标口径、结果提交规范 |
+| [`docs/DEV_LOG.md`](docs/DEV_LOG.md) / [`docs/AI_USAGE.md`](docs/AI_USAGE.md) | 开发记录与 AI 辅助披露 |
 | [`RUNLOG.md`](RUNLOG.md) | 实际执行过的命令与原始输出 |
+
+任务以 GitHub Issues #1–#5 为准；在对应 Issue 评论认领并把 Assignee 设成自己，一人一个。
