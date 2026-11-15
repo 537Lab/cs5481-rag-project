@@ -15,6 +15,24 @@ The rule that matters most, stated up front:
 > and the two numbers are never merged, never substituted for one another, and
 > never described as "factual verification" in the report.
 
+## 0. Which function produces which number (interface I3)
+
+`eval/metrics.py` is the team's only implementation; T2, T3 and T5 import these
+four names instead of re-deriving anything:
+
+| reported number | produced by | denominator |
+| --- | --- | --- |
+| `hit@1`, `hit@3` | `retrieval_hit_rate()` | answerable items |
+| `answer_correctness` | `answer_correctness()` | **answerable items a judge graded** |
+| `correct_abstention_rate`, `false_abstention_rate` | `abstention_rates()` | unanswerable / answerable items |
+| `citation_structure_rate` | `citation_structure_rate()` | non-abstained answers |
+
+Unanswerable items never enter `answer_correctness`: a good refusal is measured
+by the abstention rule in §3, and crediting it as a correct answer would inflate
+the correctness rate. `evaluate_retrieval()` and `evaluate_answers()` are thin
+aggregators over the same four functions; they add per-item rows and provenance
+and define no second formula.
+
 ## 1. Default judge: two human raters, blind, no API call
 
 Human grading is the **default and only standard** way to produce
@@ -24,20 +42,28 @@ group budget is involved.
 **Raters.** Any two group members other than the person who wrote the QA item,
 where possible. A single self-graded run is not a result; it is a smoke test.
 
-**What a rater sees.** The grading sheet produced by:
+**What a rater sees.** The grading sheet is written from the answer artifact
+that T5 produces (interface I4, `eval/answers/<run_id>.jsonl`):
 
 ```
-python -m eval.metrics score --outputs eval/results/run.json \
-    --grading-sheet eval/results/grades.csv
+python -m eval.metrics score --run-id <run_id> \
+    --grading-sheet eval/results/raw/grades.csv    # write the blank sheet
+# two raters fill in the grade column independently, then:
+python -m eval.metrics score --run-id <run_id> \
+    --grades eval/results/raw/grades.csv           # read it back
 ```
 
-Columns: `qid`, `question`, `reference_answer`, `answer_text`, `citations`,
-`grade`. Raters fill `grade` **independently**, in the same sitting, without
-discussing items, and without looking at the generation code, prompt, model
-name, or retrieval scores. Seeing `answer_text` next to `reference_answer` is
-unavoidable and accepted; what is excluded is knowledge of *which system variant
-produced the answer*. If a variant comparison is being graded, shuffle the rows
-and hide the variant label first.
+Columns: `qid`, `category`, `question`, `reference_answer`, `answer_text`,
+`citations`, `abstained`, `grade`. Only `category == answerable` rows are for
+grading: a grade entered on an unanswerable qid is dropped from
+`answer_correctness` and listed under `grades_dropped_as_unanswerable`, so a
+mistake on the sheet stays visible instead of quietly changing the denominator.
+Raters fill `grade` **independently**, in the same sitting, without discussing
+items, and without looking at the generation code, prompt, model name, or
+retrieval scores. Seeing `answer_text` next to `reference_answer` is unavoidable
+and accepted; what is excluded is knowledge of *which system variant produced the
+answer*. If a variant comparison is being graded, shuffle the rows and hide the
+variant label first.
 
 **The grade scale.** Exactly three values, enforced by `load_grades()`:
 
@@ -51,7 +77,12 @@ and hide the variant label first.
 hard items would silently inflate the rate; keeping them in the denominator is
 the conservative choice and is what the report must state. An empty `grade` cell
 is not a grade — it is simply ungraded, and an ungraded run reports
-`answer_correctness = "pending human grading"` instead of a number.
+`answer_correctness = "pending human grading"` instead of a number. A grades file
+whose cells are *all* empty is refused outright (`exit=2`), because passing the
+blank sheet back as if it were a result is the most likely mistake in this
+protocol. Because a partially graded set is not a measurement either,
+`grading_coverage` (`graded answerable / answerable`) is reported next to the
+rate: a 1/1 rate at 1/27 coverage is a smoke test, not a result.
 
 **Adjudication.** Where the two raters disagree, a third member picks
 `correct` / `incorrect` for that item after re-reading the gold quote in the
@@ -82,14 +113,32 @@ There is no automated kappa in `metrics.py` on purpose: it would need a second
 grades file, and inventing a statistic that no run actually produced is exactly
 the kind of hard-coded result this task forbids.
 
-## 3. Abstention items are graded by a rule, not by a judge
+## 3. Abstention items are graded by a rule, but labelled by a human
 
-For `category == unanswerable`, correctness is mechanical: `abstained == True` is
-a correct abstention. No human judgment, no LLM judgment. The one judgement call
-is whether an `unanswerable` question is genuinely unanswerable from
-`data/raw/`; that is checked when the set is written (each such item declares
-`ABSENT_TOKENS` in `notes`, verified by `validate_qa_set()` against the real
-corpus), not when it is scored.
+For `category == unanswerable`, scoring is mechanical: `abstained == True` is a
+correct abstention, `abstained == False` is a false abstention. No human
+judgment and no LLM judgment is involved in that step.
+
+**Deciding that a question is unanswerable is a different matter, and it is a
+human call.** `ABSENT_TOKENS` in `notes` is machine-checked by
+`validate_qa_set()`, but it proves only that the declared strings do not occur
+in `data/raw/` — a *necessary* condition, never proof:
+
+* a document can answer a question without ever using the question's words
+  ("who proposed it" vs "first proposed in 2020"), so an absent token can sit
+  next to an answer that is present in other wording;
+* a *near-miss* item — the corpus talks about the same system but not the asked
+  property — is the case most likely to produce a confident wrong answer, and
+  judging whether it is truly unanswerable needs someone to read the document.
+
+Each unanswerable item therefore needs a named person recorded in `notes` as
+`REVIEWED_BY: <name>`. `metrics.py` treats an item without that marker as
+pending review, `--require-reviewed` turns pending review into a hard failure,
+and `--formal` refuses to write a summary on top of unreviewed labels. Until the
+eight refusal items in `eval/qa_set.csv` carry real names, they are the item
+author's proposal: report the abstention numbers as provisional and say so.
+Signing off means actually re-reading the document — a name in that column that
+no one checked is worse than an empty one.
 
 ## 4. LLM-as-judge: allowed only under these conditions
 
@@ -120,6 +169,10 @@ correctness while the human grading is pending.
 - **The corpus is four Wikipedia excerpts.** "Correct" means *correct with
   respect to `data/raw/`*, not *correct about the world*. A factually true
   statement unsupported by our corpus is `incorrect` here; that is intended.
+  The 35 current items were written against that development corpus
+  (`CORPUS_V0`), and `metrics.py` prints that status in every report as
+  `qa_set_status`; when T1 freezes the formal corpus the gold quotes must be
+  re-validated and the numbers re-run before anything is written into the report.
 - **Extraction-heavy reference answers.** Most items ask for a definition, a
   date, or a named property, so a faithful answer is close to a paraphrase of
   one span. Nuanced synthesis, comparison, and multi-hop questions are under
@@ -140,3 +193,7 @@ correctness while the human grading is pending.
   `citation_structure_rate` will be 1.0 while `answer_correctness` is 0. The
   MOCK test `test_citation_structure_can_pass_while_correctness_fails` in
   `tests/test_eval_metrics.py` asserts exactly this dissociation.
+- **Unanswerable labels are only as good as the review behind them.** See §3:
+  `ABSENT_TOKENS` is a necessary condition, so `correct_abstention_rate` inherits
+  the item author's judgement until each refusal row carries a `REVIEWED_BY`
+  name. Report the count of reviewed items alongside the rate.

@@ -13,7 +13,7 @@
 4. 贡献比例按**实际人工工作**填写（设计、复核、实验、分析、报告），不是按代码行数。
 5. 报告最后一页需**单独一页**写贡献比例 + 全体成员签名（缺页会 desk reject）。
 
-## 已记录的使用（bootstrap 与整理阶段；五名组员尚未开始）
+## 已记录的使用（bootstrap 与整理阶段；除 T4 外组员尚未开始）
 
 | 日期 | AI / Agent | 用于 | 实际执行了什么 | 可核验的验证来源 | 人工复核 |
 | --- | --- | --- | --- | --- | --- |
@@ -34,6 +34,17 @@
 | YYYY-MM-DD | T3 |  |  |  |  |  | # |
 ```
 
+## 组员追加记录（T4，任务包 #4）
+
+| 日期 | 任务包 | AI / Agent 名称 | 具体用途（生成什么、改哪些文件） | 我亲自复核了什么 | 我亲自跑了哪些命令 | 云端 CI 结果 | PR 号 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-11-14 | T4 | Qoder（编码 agent）辅助写 | 起草 `eval/qa_set.csv` 题目候选、`eval/metrics.py`、`eval/judge_protocol.md`，并辅改 `eval/README.md`；未让 AI 写 gold 以外的实验数字 | 逐条比对 `qa_set.csv` 的 gold quote 确实来自 `data/raw/` 原文；确认 `metrics.py` 没硬编码任何命中率/正确率，无 `--grades` 时只输出 pending | 由 agent 在本机执行，本人未逐条重跑（review 时建议重跑）：`eval.metrics --help/validate/retrieval`、`ruff check .`、`pytest` | 待本 PR 的 `ci / check` | 分支 `t4-eval-qa-metrics` |
+| 2026-11-15 | T4（同步修订，按 PR #8 的 I3/I4/I5） | Qoder（编码 agent）辅助改 | 按组员 5 条意见改 `eval/metrics.py`（I3 函数名、I4 JSONL、分母、`REVIEWED_BY` 门、I5 快照与 summary）与 `tests/test_eval_metrics.py`（+28 例，验收双文件 45 → 73 passed），同步 `eval/README.md`、`eval/judge_protocol.md`、`RUNLOG.md` 第 7/8 节；未重写首轮代码 | 逐条核对组员意见与 `docs/PROJECT_PLAN.md` §6.1 表格；阅读并改回 agent 写的两处描述不准的注释；**发现自己造成的一个真实问题**：合并 `origin/main` 时用 `git checkout --theirs` 处理 4 个冲突文档，把首轮写在 `RUNLOG.md`/`DEV_LOG.md`/`AI_USAGE.md` 里的 T4 记录一起覆盖了（已恢复，见 `RUNLOG.md` 第 8.7 节） | 同上：全部验证命令由 agent 执行（原始输出逐条存入 `RUNLOG.md` 第 8 节），本人阅读输出但**未亲手重跑**；因此本行不能记为「组员亲自执行」 | 待本 PR 的 `ci / check` 变绿后由另一位组员 review | 分支 `t4-eval-qa-metrics` |
+
+> 注意：AI 辅写的 QA 题目仍须由**非作者的组员逐题校对原文**后才能当作正式 gold（gold 质量
+> 直接影响命中率与正确率的可信度）；`judge_protocol.md` 规定 LLM 不得用于编撰或审查 gold quote。
+> 两轮均**零付费 API 调用**，`answer_correctness` 尚无数字（人评未开始）。
+
 ## 写报告时建议披露的句子（示例，必须按实际情况改写）
 
 > 本项目的基础工程脚手架、单元测试与部分文档由 AI 编码助手在仓库账号持有人授权下生成，
@@ -41,5 +52,6 @@
 > 各模块后续实现由对应负责人审阅、修改并亲自运行验证。实验数据均来自本组实际执行的命令，
 > 未使用 AI 生成的模拟结果。各成员贡献比例与签名见本报告最后一页。
 
-不要把示例句直接照抄：截至本记录，五名组员尚未开始开发，**还没有「各模块负责人审阅」这一事实**，
-也还没有任何实验数据。贡献比例页须在全员开工后据实填写。
+不要把示例句直接照抄：除 T4 之外，其余组员尚未开始开发，上表里的验证命令**全部是 AI Agent
+而非组员本人跑出来的**，而正式的实验数据（冻结语料上的命中率与人工评分的正确率）至今为 0。
+贡献比例页须在全员开工后据实填写。

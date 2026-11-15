@@ -1,11 +1,21 @@
 # Evaluation format and shared standard
 
 This directory defines the QA format, the metric definitions and the result-submission
-policy the team will use. It currently contains **no results, no scores, and no
-20-item test set**: the 20+ real QA pairs and the single metrics implementation belong
-to T4, the chunking comparison to T2. Real, reproducible summaries are committed under
-[`results/summary/`](results/summary/) once those tasks deliver — see
-"Output location" below.
+policy the team will use.
+
+| file | what it is | status |
+| --- | --- | --- |
+| [`evidence.py`](evidence.py) | shared predicates: `locate_evidence`, `evidence_coverage`, `is_retrieval_hit` | frozen |
+| [`qa_template.csv`](qa_template.csv) | 2 SAMPLE rows showing the I2 format | format example only |
+| [`qa_set.csv`](qa_set.csv) | 35 QA pairs (27 answerable / 8 unanswerable), gold = verbatim quotes | **development set on `CORPUS_V0`**, to be re-validated against the frozen corpus |
+| [`metrics.py`](metrics.py) | the team's single metric implementation, interface I3 | delivered, no formal numbers published yet |
+| [`judge_protocol.md`](judge_protocol.md) | how answer correctness and unanswerable labels are decided by humans | protocol; grading not started |
+| [`results/`](results/README.md) | `summary/` committed, `raw/` gitignored | `summary/` still empty |
+
+The 20+ real QA pairs and the single metrics implementation therefore exist, but
+no experiment result has been published here: the chunking comparison belongs to
+T2, the answer artifacts (I4) to T5, and formal numbers need the frozen corpus
+(I1). See "Output location and honesty rules" below.
 
 The project's single source of truth for background, goals, the item-by-item mapping
 of the instructor's requirements, the five tasks, the dependency/integration schedule
@@ -75,25 +85,66 @@ T5 must import it; nobody re-implements hit@k, correctness or abstention rates i
 their own script. `eval/evidence.py` stays the shared predicate layer
 (`locate_evidence`, `evidence_coverage`, `is_retrieval_hit`).
 
-- **Retrieval hit rate** = (# answerable questions where `is_retrieval_hit(top_k,
-  span, min_coverage)` is True) / (total answerable questions). Report hit@1 and
-  hit@3 separately and state `min_coverage` (suggested default 0.5). Same value
-  for every strategy in a comparison.
-- **Answer correctness** = (# questions whose `answer_text` is judged correct
-  against `reference_answer`) / (total answerable questions). Default judge:
-  **human grading**. LLM-as-judge is allowed only if disclosed, and any paid API
-  call must be approved by the group first. Structural citation checks do NOT
+The public signatures are the frozen part of interface **I3**; the names below are
+what other tasks must import:
+
+```python
+retrieval_hit_rate(items, spans, hits_by_qid, *, hit_levels, min_coverage)
+answer_correctness(items, grades)
+abstention_rates(items, outputs)
+citation_structure_rate(items, outputs, *, chunk_of)
+```
+
+- **Retrieval hit rate** — `retrieval_hit_rate()` = (# answerable questions where
+  `is_retrieval_hit(top_k, span, min_coverage)` is True) / (total answerable
+  questions). Report hit@1 and hit@3 separately and state `min_coverage` (suggested
+  default 0.5). Same value for every strategy in a comparison.
+- **Answer correctness** — `answer_correctness()` = (# **answerable** questions
+  judged correct against `reference_answer`) / (# answerable questions actually
+  graded). Unanswerable questions are never in this denominator — a good refusal is
+  an abstention result, not a correct answer — and `grading_coverage` is reported
+  next to the rate so a partly graded set cannot read like a finished one. Default
+  judge: **human grading**. LLM-as-judge is allowed only if disclosed, and any paid
+  API call must be approved by the group first. Structural citation checks do NOT
   count as correctness.
-- **Correct abstention rate** = (# `unanswerable` questions with
-  `abstained == True`) / (total unanswerable questions). Also report the
-  false-abstention rate on answerable questions.
-- **Citation structure rate** = (# non-abstained answers passing
-  `verify_citation_structure()`) / (total non-abstained answers). Structural
-  only — see the three-level table above.
+- **Correct abstention rate** — `abstention_rates()` = (# `unanswerable` questions
+  with `abstained == True`) / (total unanswerable questions). Also report the
+  false-abstention rate on answerable questions. Labelling a question unanswerable
+  is a human judgement attested per item as `REVIEWED_BY`; `ABSENT_TOKENS` alone is
+  only a necessary condition ([`judge_protocol.md`](judge_protocol.md) §3).
+- **Citation structure rate** — `citation_structure_rate()` = (# non-abstained
+  answers passing `verify_citation_structure()`) / (total non-abstained answers).
+  Structural only — see the three-level table above.
 
 Report each metric **per chunking strategy**, using the same QA set, same top-k,
 same `min_coverage`, same embedding model and same LLM. Otherwise the
 comparison is meaningless.
+
+## Running the T4 code
+
+All commands run from the repository root and need no API key.
+
+| command | what it proves |
+| --- | --- |
+| `python -m eval.metrics --help` | the I3 entry point is importable and callable |
+| `python -m eval.metrics validate` | every gold quote is verbatim in `data/raw/`, labels are consistent, declared tokens really are absent |
+| `python -m eval.metrics validate --require-reviewed` | fails until a named human attests each unanswerable item (`REVIEWED_BY`) |
+| `python -m eval.metrics retrieval --hits 1,3 --out eval/results/raw/retrieval_fixed.json` | REAL hit@k over the built index (needs `python -m ragkit.cli ingest`) |
+| `python -m eval.metrics retrieval --chunking paragraph --out ...` | the same QA against the other strategy's collection, without editing `config.toml` |
+| `python -m eval.metrics score --run-id <run_id> --grades eval/results/raw/grades.csv` | scores T5's answer artifact `eval/answers/<run_id>.jsonl` |
+| `python -m eval.metrics mock-demo` | metric maths and CLI wiring on MOCK fixtures; every number is labelled MOCK |
+
+`score` reads interface I4: one JSON object per line, the nested `answer` object
+plus `retrieved_chunk_ids`, `run_id` and `config_ref`. Flat records, `.json`
+lists and `{'items': [...]}` envelopes from earlier drafts are still accepted, so
+no existing caller has to change. A grading sheet written from that artifact is
+refused if no grade cell is filled, so an ungraded run cannot look like a graded
+one, and a run whose `answer.model` says it is a scripted double is called out
+when `--label REAL` is used (`--label MOCK` is the honest flag for plumbing tests).
+`--summary-dir DIR` together with `--formal`
+writes the committed `config.json` / `metrics.json` / `run.md` bundle; it refuses
+MOCK runs and refuses any run whose inputs are not frozen yet, which keeps
+development numbers out of the directory the report reads.
 
 ## Frozen inputs and who consumes what
 
@@ -127,15 +178,19 @@ I4 `eval/answers/<run_id>.jsonl` answer artifacts (T5), I5 config/result schema
 Never fabricate numbers and never call `verify_citation_structure()` result
 "answer correctness".
 
-## Intentionally NOT here yet
+## Not here (yet)
 
-- The 20+ real QA pairs and their gold quotes (T4).
-- `eval/metrics.py` and any comparison table or number (T4).
-- The chunking comparison experiment itself (T2).
-- `eval/answers/<run_id>.jsonl` answer artifacts (T5).
-- Any committed summary metrics or charts — only the empty
-  `results/summary/` placeholder exists so far.
-- Any chunk-size / overlap tuning, or paid LLM-as-judge calls.
+- **Formal experiment numbers.** `results/summary/` is empty on purpose. The
+  development hit rates are recorded in `RUNLOG.md` and in gitignored
+  `results/raw/`, and `metrics.py` labels them `qa_set_status: development`.
+- `eval/answers/<run_id>.jsonl` answer artifacts (T5). Until a real one exists,
+  `score` has only been exercised against a MOCK artifact and answer correctness
+  cannot be computed at all.
+- Human answer grading, so `answer_correctness` stays "pending human grading".
+- The frozen formal corpus (I1) and the QA re-validation that follows it: the 35
+  current items were written against `CORPUS_V0` and stay the development set.
+- The chunking comparison experiment itself (T2), any chunk-size / overlap
+  tuning, and any paid LLM-as-judge call.
 
 What each of these must produce, and by when, is in
 [`docs/PROJECT_PLAN.md` §6.5](../docs/PROJECT_PLAN.md).

@@ -16,10 +16,13 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from eval import metrics as metrics_module
 from eval.evidence import locate_evidence
 from eval.metrics import (
     ALLOWED_GRADES,
@@ -27,16 +30,27 @@ from eval.metrics import (
     QA_COLUMNS,
     QAItem,
     QASetError,
+    _config_snapshot,
     _relative,
+    abstention_rates,
+    answer_correctness,
+    artifact_provenance,
+    assert_formal_inputs,
+    citation_structure_rate,
     citations_from_record,
     evaluate_answers,
     evaluate_retrieval,
     load_grades,
     load_outputs,
     load_qa,
+    looks_scripted,
     parse_hits,
+    resolve_answer_path,
+    retrieval_hit_rate,
+    unreviewed_items,
     validate_qa_set,
     write_grading_sheet,
+    write_summary,
 )
 from ragkit.config import ROOT
 from ragkit.contracts import Chunk, RetrievedChunk
@@ -541,3 +555,435 @@ def test_relative_helper_keeps_paths_repo_relative():
     assert _relative(ROOT / "data" / "raw") == "data/raw"
     assert _relative(ROOT / "eval" / "qa_set.csv") == "eval/qa_set.csv"
     assert _relative(ROOT / "eval" / "results" / "run.json") == "eval/results/run.json"
+
+
+def test_command_line_follows_the_arguments_main_was_given(monkeypatch):
+    """Imported calls must not borrow the driver's argv or leak a local path."""
+    monkeypatch.setattr(
+        metrics_module,
+        "_COMMAND_ARGS",
+        ["retrieval", "--chunking", "paragraph", "--hits", "1,3", "--out",
+         str(ROOT / "eval" / "results" / "raw" / "x.json")],
+    )
+    assert metrics_module._command_line() == (
+        "python -m eval.metrics retrieval --chunking paragraph --hits 1,3 "
+        "--out eval/results/raw/x.json"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Interface I3: the four public functions are THE implementation, not a copy
+# ---------------------------------------------------------------------------
+
+
+def test_i3_functions_are_importable_with_the_frozen_names():
+    """T2 / T3 / T5 import exactly these four; a rename would break their PRs."""
+    for func in (
+        retrieval_hit_rate,
+        answer_correctness,
+        abstention_rates,
+        citation_structure_rate,
+    ):
+        assert callable(func)
+        assert func.__doc__, "the team's only metric implementation must explain itself"
+
+
+def test_the_public_function_and_the_aggregator_return_the_same_numbers(documents):
+    """One formula: the aggregator may add rows, it may not re-derive a rate."""
+    span = _span(documents, QUOTE_2020)
+    gold = _chunk(documents, span.char_start, span.char_end, "rag_wikipedia#0007")
+    noise = _chunk(documents, 0, 165, "rag_wikipedia#0000")
+    items = [_answerable("M01", QUOTE_2020), _answerable("M02", QUOTE_2020)]
+    spans = {item.qid: span for item in items}
+    hits = {"M01": _hits([gold]), "M02": _hits([noise, gold])}
+    public = retrieval_hit_rate(items, spans, hits, hit_levels=(1, 3), min_coverage=0.5)
+    aggregated = evaluate_retrieval(items, spans, hits, hit_levels=(1, 3), min_coverage=0.5)
+    for level in (1, 3):
+        assert public["rates"][f"hit@{level}"] == aggregated.metrics[f"hit@{level}"]
+    assert public["n_answerable"] == aggregated.metrics["n_answerable"]
+
+
+def test_hit_levels_are_reported_for_whatever_k_the_caller_asks(documents):
+    span = _span(documents, QUOTE_2020)
+    gold = _chunk(documents, span.char_start, span.char_end, "rag_wikipedia#0007")
+    item = _answerable("M01", QUOTE_2020)
+    rates = retrieval_hit_rate([item], {item.qid: span}, {item.qid: _hits([gold])},
+                               hit_levels=(1, 2, 5))["rates"]
+    assert set(rates) == {"hit@1", "hit@2", "hit@5"}, "T2 asks for its own k, we obey"
+    assert all(value["rate"] == 1.0 for value in rates.values())
+
+
+# ---------------------------------------------------------------------------
+# Interface I3 boundary conditions required by the task card: empty / refusal
+# ---------------------------------------------------------------------------
+
+
+def test_empty_inputs_report_no_rate_instead_of_a_zero():
+    """0/0 is undefined: a bare 0.0 would read like a measured failure."""
+    assert retrieval_hit_rate([], {}, {}, hit_levels=(1,))["rates"]["hit@1"] == {
+        "hits": 0, "n": 0, "rate": None
+    }
+    abstention = abstention_rates([], {})
+    assert abstention["correct_abstention_rate"]["rate"] is None
+    assert abstention["false_abstention_rate"]["rate"] is None
+    assert citation_structure_rate([], {}, chunk_of=lambda cid: None)["rate"]["rate"] is None
+    assert answer_correctness([], {})["correctness"] == PENDING_CORRECTNESS
+
+
+def test_a_system_that_refuses_everything_scores_zero_on_answerable_items(documents):
+    """All-refusal: the two abstention directions must not cancel each other."""
+    items, spans, outputs, _ = _answer_inputs(documents)
+    refused = {
+        qid: dict(record, abstained=True) if not record.get("abstained") else record
+        for qid, record in outputs.items()
+    }
+    result = abstention_rates(items, refused)
+    assert result["false_abstention_rate"] == {"hits": 1, "n": 1, "rate": 1.0}
+    assert result["correct_abstention_rate"]["rate"] == 1.0
+    assert result["n_answered"] == 0
+    structure = citation_structure_rate(items, refused, chunk_of=lambda cid: None)
+    assert structure["rate"] == {"hits": 0, "n": 0, "rate": None}, "a refusal cites nothing"
+
+
+def test_abstention_and_structure_need_no_store_at_all(documents):
+    """Both are pure over the artifact: T5 can call them without a vector store."""
+    items, _, outputs, _ = _answer_inputs(documents)
+    assert abstention_rates(items, outputs)["n_unanswerable"] == 1
+    assert citation_structure_rate(items, outputs, chunk_of=lambda cid: None)["n_checked"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Reviewer point 3: the correctness denominator is answerable items only
+# ---------------------------------------------------------------------------
+
+
+def test_unanswerable_grades_never_enter_the_correctness_denominator(documents):
+    items, spans, outputs, gold = _answer_inputs(documents)
+    result = evaluate_answers(
+        items,
+        spans,
+        outputs,
+        chunk_of={gold.chunk_id: gold}.__getitem__,
+        grades={"M01": "correct", "N01": "correct"},
+    )
+    assert result.metrics["answer_correctness"] == {"hits": 1, "n": 1, "rate": 1.0}
+    assert result.metrics["n_gradable"] == 1, "the refusal case is not a correct answer"
+    assert result.metrics["grades_dropped_as_unanswerable"] == ["N01"]
+
+
+def test_grading_coverage_exposes_the_ungraded_remainder(documents):
+    span = _span(documents, QUOTE_2020)
+    gold = _chunk(documents, span.char_start, span.char_end, "rag_wikipedia#0007")
+    items = [_answerable("M01", QUOTE_2020), _answerable("M02", QUOTE_2020)]
+    outputs = {item.qid: _record(item.qid, gold) for item in items}
+    result = evaluate_answers(
+        items, {item.qid: span for item in items}, outputs,
+        chunk_of={gold.chunk_id: gold}.__getitem__,
+        grades={"M01": "correct"},
+    )
+    assert result.metrics["answer_correctness"]["n"] == 1
+    assert result.metrics["n_gradable"] == 2
+    assert result.metrics["grading_coverage"] == {"hits": 1, "n": 2, "rate": 0.5}
+
+
+def test_unsure_counts_as_not_correct_and_stays_visible(documents):
+    items, spans, outputs, gold = _answer_inputs(documents)
+    result = evaluate_answers(
+        items, spans, outputs,
+        chunk_of={gold.chunk_id: gold}.__getitem__,
+        grades={"M01": "unsure"},
+    )
+    assert result.metrics["answer_correctness"] == {"hits": 0, "n": 1, "rate": 0.0}
+    assert result.metrics["grade_counts"] == {"correct": 0, "incorrect": 0, "unsure": 1}
+
+
+def test_grading_an_unknown_qid_is_an_error_not_a_discarded_row(documents):
+    items, _, _, _ = _answer_inputs(documents)
+    with pytest.raises(QASetError, match="absent from the QA set"):
+        answer_correctness(items, {"M99": "correct"})
+
+
+def test_an_illegal_grade_reaches_the_metric_kernel_too():
+    items = [_answerable("M01", QUOTE_2020)]
+    with pytest.raises(QASetError, match="must be one of"):
+        answer_correctness(items, {"M01": "maybe"})
+    assert set(ALLOWED_GRADES) == {"correct", "incorrect", "unsure"}
+
+
+def test_grading_sheet_shells_out_only_answerable_rows(documents, tmp_path):
+    """The sheet itself shows why a refusal row has no grade to give."""
+    items, _, outputs, _ = _answer_inputs(documents)
+    sheet = write_grading_sheet(tmp_path / "grades.csv", items, outputs)
+    with sheet.open(encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert [row["category"] for row in rows] == ["answerable", "unanswerable"]
+    assert rows[1]["abstained"] == "True", "rule-scored, so the grade cell stays empty"
+
+
+# ---------------------------------------------------------------------------
+# Reviewer point 4: ABSENT_TOKENS is necessary, a human makes it a label
+# ---------------------------------------------------------------------------
+
+
+def _refusal(qid: str, notes: str) -> QAItem:
+    return QAItem(
+        qid=qid,
+        question=f"MOCK unanswerable {qid}?",
+        reference_answer="",
+        evidence_doc_id="",
+        evidence_quote="",
+        category="unanswerable",
+        notes=notes,
+    )
+
+
+def test_absent_tokens_alone_leave_the_item_pending_review():
+    item = _refusal("N01", "OUT-OF-DOMAIN. ABSENT_TOKENS: gpu")
+    assert item.absent_tokens == ("gpu",)
+    assert item.reviewed_by == ""
+    assert unreviewed_items([item]) == ["N01"]
+
+
+def test_review_markers_parse_in_whatever_order_they_are_written():
+    first = _refusal("N01", "ABSENT_TOKENS: gpu; REVIEWED_BY: Li Wei")
+    second = _refusal("N02", "REVIEWED_BY: Li Wei; ABSENT_TOKENS: gpu")
+    third = _refusal("N03", "ABSENT_TOKENS: gpu. REVIEWED_BY: Li Wei.")
+    for item in (first, second, third):
+        assert item.absent_tokens == ("gpu",), item.notes
+        assert item.reviewed_by == "Li Wei", item.notes
+    assert unreviewed_items([first, second, third]) == []
+
+
+def test_require_reviewed_fails_until_a_human_signs_off(documents):
+    answerable = _answerable("M01", QUOTE_2020)
+    pending = _refusal("N01", "OUT-OF-DOMAIN. ABSENT_TOKENS: gpu")
+    signed = _refusal("N02", "OUT-OF-DOMAIN. ABSENT_TOKENS: gpu; REVIEWED_BY: Li Wei")
+    with pytest.raises(QASetError, match="REVIEWED_BY"):
+        validate_qa_set([answerable, pending], documents, min_items=1, require_reviewed=True)
+    spans = validate_qa_set(
+        [answerable, signed], documents, min_items=1, require_reviewed=True
+    )
+    assert set(spans) == {"M01"}, "unanswerable items have no gold to resolve"
+
+
+def test_formal_review_gate_is_currently_closed_on_the_committed_set(qa_items, documents):
+    """No named human has signed the refusal labels yet, so --require-reviewed fails.
+
+    When the group does review them this test flips on purpose: update it in the
+    same PR that adds the REVIEWED_BY names, do not simply delete it.
+    """
+    unanswerable = [item for item in qa_items if not item.is_answerable]
+    assert unanswerable
+    assert unreviewed_items(unanswerable)
+    with pytest.raises(QASetError, match="REVIEWED_BY"):
+        validate_qa_set(qa_items, documents, require_reviewed=True)
+
+
+# ---------------------------------------------------------------------------
+# Reviewer point 2: interface I4 answer artifacts (JSONL, retrieved_chunk_ids)
+# ---------------------------------------------------------------------------
+
+
+def _i4_record(chunk: Chunk, qid: str, *, abstained=False, answer_text="MOCK answer.") -> dict:
+    """A record in the shape T5 was asked to write, nested ``answer`` and all."""
+    return {
+        "qid": qid,
+        "answer": {
+            "answer_text": answer_text,
+            "abstained": abstained,
+            "citations": [
+                {"chunk_id": chunk.chunk_id, "doc_id": chunk.doc_id, "quote": chunk.text[:40]}
+            ],
+            "model": "mock-llm",
+            "raw": answer_text,
+        },
+        "retrieved_chunk_ids": [chunk.chunk_id],
+        "run_id": "20261115-mock-01",
+        "config_ref": "eval/results/summary/mock/config.json",
+    }
+
+
+def test_jsonl_artifact_is_read_and_the_nested_answer_is_flattened(documents, tmp_path):
+    span = _span(documents, QUOTE_2020)
+    gold = _chunk(documents, span.char_start, span.char_end, "rag_wikipedia#0007")
+    path = tmp_path / "20261115-mock-01.jsonl"
+    lines = [
+        json.dumps(_i4_record(gold, "M01")),
+        "",
+        json.dumps(_i4_record(gold, "N01", abstained=True, answer_text="refused")),
+    ]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    outputs = load_outputs(path)
+    assert set(outputs) == {"M01", "N01"}
+    assert outputs["M01"]["answer_text"] == "MOCK answer."
+    assert outputs["M01"]["retrieved_chunk_ids"] == [gold.chunk_id]
+    assert "answer" not in outputs["M01"], "the nested shape is normalised once, at load"
+    assert artifact_provenance(outputs) == {
+        "run_id": "20261115-mock-01",
+        "config_ref": "eval/results/summary/mock/config.json",
+        "models": ["mock-llm"],
+        "n_records": 2,
+    }
+
+
+def test_a_scripted_artifact_admits_itself_through_the_model_field():
+    """`--label REAL` on a double-produced artifact would print a warning.
+
+    The predicate reads what T5 writes in `answer.model`, so the guard travels
+    with the artifact instead of relying on whoever types the command.
+    """
+    assert looks_scripted(["mock-llm", "scripted-mock-generator"])
+    assert not looks_scripted(["gpt-4o-mini"])
+    assert not looks_scripted(["gpt-4o-mini", "mock-llm"]), "a mixed run is not a double"
+    assert not looks_scripted([]), "absent model information proves nothing"
+
+
+def test_an_i4_record_scores_exactly_like_the_earlier_flat_record(documents):
+    """The new field name must not move a single number."""
+    items, spans, outputs, gold = _answer_inputs(documents)
+    chunk_of = {gold.chunk_id: gold}.__getitem__
+    flat = evaluate_answers(items, spans, outputs, chunk_of=chunk_of, hit_levels=(1, 2))
+    nested = {
+        "M01": _i4_record(gold, "M01"),
+        "N01": _i4_record(gold, "N01", abstained=True, answer_text="refused"),
+    }
+    recorded = evaluate_answers(items, spans, nested, chunk_of=chunk_of, hit_levels=(1, 2))
+    assert recorded.metrics["hit@1"] == flat.metrics["hit@1"]
+    assert recorded.metrics["hit@2"] == flat.metrics["hit@2"]
+    assert recorded.metrics["citation_structure_rate"] == flat.metrics["citation_structure_rate"]
+    assert recorded.metrics["false_abstention_rate"] == flat.metrics["false_abstention_rate"]
+    assert recorded.items[0]["first_hit_rank"] == flat.items[0]["first_hit_rank"]
+
+
+def test_two_runs_in_one_artifact_are_refused(tmp_path):
+    path = tmp_path / "mixed.jsonl"
+    path.write_text(
+        json.dumps({"qid": "M01", "run_id": "run-a"}) + "\n"
+        + json.dumps({"qid": "M02", "run_id": "run-b"}) + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(QASetError, match="mixes run_id"):
+        artifact_provenance(load_outputs(path))
+
+
+def test_duplicate_record_for_one_qid_is_refused(tmp_path):
+    path = tmp_path / "dup.jsonl"
+    path.write_text('{"qid": "M01"}\n{"qid": "M01"}\n', encoding="utf-8")
+    with pytest.raises(QASetError, match="duplicate record"):
+        load_outputs(path)
+
+
+def test_a_broken_jsonl_line_names_its_line_number(tmp_path):
+    path = tmp_path / "broken.jsonl"
+    path.write_text('{"qid": "M01"}\nnot json\n', encoding="utf-8")
+    with pytest.raises(QASetError, match=r"broken\.jsonl:2"):
+        load_outputs(path)
+
+
+def test_resolve_answer_path_finds_the_run_artifact_by_id(tmp_path, monkeypatch):
+    monkeypatch.setattr("eval.metrics.ANSWERS_DIR", tmp_path)
+    artifact = tmp_path / "run-a.jsonl"
+    artifact.write_text('{"qid": "M01"}\n', encoding="utf-8")
+    assert resolve_answer_path("run-a", None) == artifact
+    assert resolve_answer_path("run-b", artifact) == artifact, "--outputs still wins"
+    with pytest.raises(QASetError, match="needs --outputs PATH or --run-id ID"):
+        resolve_answer_path(None, None)
+    with pytest.raises(QASetError, match="no answer artifact"):
+        resolve_answer_path("missing", None)
+
+
+# ---------------------------------------------------------------------------
+# Interface I5: configuration snapshot and the summary/ directory contract
+# ---------------------------------------------------------------------------
+
+
+def _stub_settings(**overrides):
+    defaults = {
+        "root": ROOT,
+        "raw_dir": ROOT / "data" / "raw",
+        "manifest": ROOT / "data" / "raw" / "manifest.json",
+        "chunk_strategy": "fixed",
+        "chunk_size": 120,
+        "chunk_overlap": 20,
+        "embedding_provider": "local",
+        "local_model": "all-MiniLM-L6-v2",
+        "api_model": "text-embedding-3-small",
+        "embedding_dimension": 384,
+        "llm_model": "mock-llm",
+        "temperature": 0.0,
+        "max_tokens": 512,
+        "top_k": 3,
+        "collection_name": "chunks_fixed",
+    }
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
+
+
+def test_config_snapshot_uses_the_frozen_i5_field_names():
+    snapshot = _config_snapshot(
+        _stub_settings(), [_answerable("M01", QUOTE_2020)], min_coverage=0.5
+    )
+    for key in (
+        "strategy",
+        "size",
+        "overlap",
+        "top_k",
+        "min_coverage",
+        "embedding",
+        "llm",
+        "corpus_ref",
+        "qa_set_ref",
+    ):
+        assert key in snapshot, f"I5 froze this field name: {key}"
+    assert snapshot["qa_set_status"], "development numbers must be labelled development"
+    assert re.fullmatch(r".+@[0-9a-f]{12}", snapshot["corpus_ref"]), snapshot["corpus_ref"]
+    assert "@" in snapshot["qa_set_ref"], "a QA reference without a hash cannot be pinned"
+
+
+def test_summary_bundle_carries_the_five_required_parts(documents, tmp_path, monkeypatch):
+    frozen = tmp_path / "frozen_manifest.json"
+    frozen.write_text(json.dumps({"corpus_id": "cs5481-corpus-0001"}), encoding="utf-8")
+    monkeypatch.setattr("eval.metrics.FROZEN_MANIFEST", frozen)
+    span = _span(documents, QUOTE_2020)
+    item = _answerable("M01", QUOTE_2020)
+    result = evaluate_retrieval(
+        [item], {item.qid: span}, {item.qid: _hits([])}, hit_levels=(1,)
+    )
+    result.label = "REAL"
+    result.config = _config_snapshot(_stub_settings(), [item], min_coverage=0.5)
+    directory = tmp_path / "summary" / "chunking_comparison"
+    written = write_summary(result, directory, executor="A. Member")
+    assert {path.name for path in written} == {"config.json", "metrics.json", "run.md"}
+    metrics = json.loads((directory / "metrics.json").read_text(encoding="utf-8"))
+    for key in (
+        "experiment_id",
+        "generated_at",
+        "command",
+        "config_ref",
+        "corpus_ref",
+        "qa_set_ref",
+        "judge",
+    ):
+        assert key in metrics, f"eval/results/README.md asks for {key}"
+    assert metrics["corpus_ref"].startswith("cs5481-corpus-0001@")
+    assert metrics["judge"] == "not applicable: retrieval-only run"
+    run_log = (directory / "run.md").read_text(encoding="utf-8")
+    for fragment in ("command:", "date:", "executor: A. Member", "exit code:"):
+        assert fragment in run_log
+
+
+def test_summary_refuses_a_mock_run(documents, tmp_path):
+    span = _span(documents, QUOTE_2020)
+    item = _answerable("M01", QUOTE_2020)
+    result = evaluate_retrieval(
+        [item], {item.qid: span}, {item.qid: _hits([])}, hit_levels=(1,)
+    )
+    result.label = "MOCK"
+    with pytest.raises(QASetError, match="MOCK"):
+        write_summary(result, tmp_path / "summary" / "oops")
+
+
+def test_formal_gate_refuses_while_the_inputs_are_still_moving(qa_items, tmp_path, monkeypatch):
+    monkeypatch.setattr("eval.metrics.FROZEN_MANIFEST", tmp_path / "absent.json")
+    with pytest.raises(QASetError, match="frozen"):
+        assert_formal_inputs(_stub_settings(), qa_items)
