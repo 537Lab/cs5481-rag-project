@@ -1,28 +1,27 @@
-# Evaluation format — SHARED STANDARD, QA SET, AND METRIC CODE
+# Evaluation format and shared standard
 
-This directory holds the metric definitions the team agreed on **plus** the T4
-delivery: `qa_set.csv`, `metrics.py`, and `judge_protocol.md`. It still contains
-**no experiment results and no numbers** — result files go to `eval/results/`
-(gitignored) and are written only by a command you actually ran.
+This directory defines the QA format, the metric definitions and the result-submission
+policy the team will use. It currently contains **no results, no scores, and no
+20-item test set**: the 20+ real QA pairs and the single metrics implementation belong
+to T4, the chunking comparison to T2. Real, reproducible summaries are committed under
+[`results/summary/`](results/summary/) once those tasks deliver — see
+"Output location" below.
 
-| file | what it is | task |
-| --- | --- | --- |
-| `evidence.py` | gold spans, coverage, `is_retrieval_hit()` — strategy-independent | shared standard (frozen) |
-| `qa_template.csv` | 2 SAMPLE rows showing the csv format only | shared standard |
-| `qa_set.csv` | **35 items: 27 answerable + 8 unanswerable**, gold quotes verbatim in `data/raw/` | T4 |
-| `metrics.py` | validate / retrieval / score / mock-demo, pure kernels + thin CLI | T4 |
-| `judge_protocol.md` | how answer correctness is decided (human default, LLM rules) | T4 |
-| `results/` | gitignored; every real run writes its json + provenance here | T2/T5 runs |
+The project's single source of truth for background, goals, the item-by-item mapping
+of the instructor's requirements, the five tasks, the dependency/integration schedule
+and the final deliverables is [`docs/PROJECT_PLAN.md`](../docs/PROJECT_PLAN.md).
+This file only defines evaluation format and metric semantics.
 
 ## What the assignment requires
 
-- At least **20 question-answer pairs**.
-- Compare **at least two chunking strategies** and report their impact on
-  retrieval quality.
-- Report **retrieval hit rate** and **answer correctness**.
-- Answers must cite sources, and the system must abstain when there is no answer.
+See [`docs/PROJECT_PLAN.md` §3](../docs/PROJECT_PLAN.md) for the verbatim requirements
+and their current coverage. In short: at least **20 question-answer pairs**, a
+comparison of **at least two chunking strategies** with its impact on retrieval
+quality, **retrieval hit rate** and **answer correctness**, cited sources, and explicit
+abstention when the knowledge base has no answer. Passing unit tests does not satisfy
+any of these by itself.
 
-## Fix applied in v1.1: chunk ids must NOT be gold labels
+## Gold labels are verbatim quotes, not chunk ids
 
 `chunk_id` is an **output** of a chunking strategy. `fixed` vs `paragraph`, or
 two different chunk sizes, produce different ids and different boundaries for
@@ -43,16 +42,6 @@ make the comparison meaningless.
 `eval/qa_template.csv` contains **2 SAMPLE rows showing the format only**. They
 are not evaluation data. The SAMPLE-001 quote was verified to exist verbatim at
 chars 1651–1727 of `data/raw/rag_wikipedia.txt`.
-
-`eval/qa_set.csv` (T4) follows the same 7 columns. Its `evidence_quote` values
-are verbatim substrings of the four source documents; run
-`python -m eval.metrics validate` to re-check all of them against the corpus.
-Unanswerable items carry no gold evidence and declare `ABSENT_TOKENS: ...` in
-`notes` — tokens that are asserted **not to occur anywhere** in `data/raw/`,
-which the same command verifies. Coverage of the set: 10 items on
-`rag_wikipedia`, 8 on `vector_db_wikipedia`, 5 on `word_embedding_wikipedia`, 4
-on `bm25_wikipedia`; the 8 unanswerable items are 5 near-misses (topic-adjacent
-but unsupported) and 3 out-of-domain.
 
 ## QA file format (`qa_template.csv`)
 
@@ -79,7 +68,12 @@ check. It **cannot** prove level 3, and it must never be reported as "answer
 correctness" or "factual verification". `verify_citations()` is a backwards
 compatible alias of that structural check.
 
-## Metric definitions (agree before writing code)
+## Metric definitions — ONE implementation, owned by T4
+
+`eval/metrics.py` (T4) is the **only** implementation of these metrics. T2, T3 and
+T5 must import it; nobody re-implements hit@k, correctness or abstention rates in
+their own script. `eval/evidence.py` stays the shared predicate layer
+(`locate_evidence`, `evidence_coverage`, `is_retrieval_hit`).
 
 - **Retrieval hit rate** = (# answerable questions where `is_retrieval_hit(top_k,
   span, min_coverage)` is True) / (total answerable questions). Report hit@1 and
@@ -101,52 +95,47 @@ Report each metric **per chunking strategy**, using the same QA set, same top-k,
 same `min_coverage`, same embedding model and same LLM. Otherwise the
 comparison is meaningless.
 
-### How the T4 code expresses these definitions
+## Frozen inputs and who consumes what
 
-`eval/metrics.py` implements the four bullets above and nothing else. Every rate
-is emitted as a `(numerator, denominator, rate)` triple — never a bare
-percentage — so each number can be audited against the rows that produced it.
+Formal numbers are only meaningful once the inputs are frozen. `CORPUS_V0`
+(the 4 committed documents) is frozen for development only and is **not** the
+formal experiment corpus unless the group explicitly falls back to it
+(see [`docs/PROJECT_PLAN.md` §6.2](../docs/PROJECT_PLAN.md)). T4's `qa_set.csv`
+gold quotes must be verbatim substrings of the frozen corpus snapshot, and every
+strategy comparison must use the same frozen `qa_set.csv`.
 
-```command
-python -m eval.metrics --help
-python -m eval.metrics validate                      # gold quotes + ABSENT_TOKENS, offline
-python -m eval.metrics retrieval --hits 1,3 --out eval/results/retrieval.json
-python -m eval.metrics retrieval --chunking paragraph --out eval/results/retrieval_paragraph.json
-python -m eval.metrics score --outputs eval/results/run.json
-python -m eval.metrics score --outputs eval/results/run.json --grades eval/results/grades.csv
-python -m eval.metrics mock-demo                     # MOCK plumbing, never a result
-```
-
-* `validate` needs no index and no key: it reads `data/raw/` and resolves every
-  gold quote through `locate_evidence()`.
-* `retrieval` needs the index built once (`python -m ragkit.cli ingest`) but **no
-  API key** — the local ONNX embedder does the work. `--chunking` overrides
-  `config.toml` for that run only, which is what the T2 fixed-vs-paragraph
-  comparison reuses.
-* `score` reads an answer run captured by T5 (format documented at the top of
-  `metrics.py`) and recomputes abstention, citation structure, and hit@k of the
-  context the run actually used. Chunk ids are round-tripped through
-  `store.get_chunk()`, so a fabricated id is an error rather than a zero.
-  `answer_correctness` stays the string `"pending human grading"` unless a
-  `--grades` file is supplied: the code cannot report a correctness number it
-  does not have.
-* `min_coverage` defaults to `0.5`, is overridable, and is written into every
-  report so hit rates from different settings are never silently compared.
-* Every report embeds its own provenance: command line, UTC timestamp, chunking
-  strategy/size/overlap, collection, embedding provider+dimension, LLM model,
-  python version, and `label` (`REAL` or `MOCK`).
+The shared artifacts and their owners are defined in
+[`docs/PROJECT_PLAN.md` §6.1](../docs/PROJECT_PLAN.md): I1 corpus snapshot (T1),
+I2 `qa_set.csv` schema (T4), I3 `metrics.py` signatures (T4),
+I4 `eval/answers/<run_id>.jsonl` answer artifacts (T5), I5 config/result schema
+(T2 + T4). Freeze points and the T1 → T4 time-box are in
+[`docs/PROJECT_PLAN.md` §6.6](../docs/PROJECT_PLAN.md).
 
 ## Output location and honesty rules
 
-Write results to `eval/results/` (gitignored). With every result file, record
-the exact command, config, strategy, model and date. Never fabricate numbers,
-never paste a MOCK output into a result, and never commit a result for a run
-that did not happen.
+- **Do commit**: real, reproducible aggregate metrics, charts, config snapshots
+  and a run manifest under [`results/summary/`](results/README.md).
+- **Do not commit**: raw per-item outputs, logs and caches under
+  `eval/results/raw/` (gitignored), MOCK outputs, AI-invented numbers, or any
+  result for a run that did not happen.
+- Every summary must record the exact command, config, strategy, model, date,
+  executor and the T1/T4 frozen snapshot ids so a reviewer can recompute it.
+  Full submission rules are in [`results/README.md`](results/README.md).
+- Development runs on `CORPUS_V0` / MOCK fixtures must be labelled as such and
+  must never be reported as formal experiment results.
 
-## Intentionally NOT here
+Never fabricate numbers and never call `verify_citation_structure()` result
+"answer correctness".
 
-- Experiment results, comparison tables, or charts (T2/T5 runs; they land in
-  `eval/results/`, which is gitignored).
-- The answer run itself — producing `eval/results/run.json` is T5's job.
-- Any chunk-size / overlap tuning, or paid LLM-as-judge calls (see
-  `judge_protocol.md` §4 for the conditions under which those become allowed).
+## Intentionally NOT here yet
+
+- The 20+ real QA pairs and their gold quotes (T4).
+- `eval/metrics.py` and any comparison table or number (T4).
+- The chunking comparison experiment itself (T2).
+- `eval/answers/<run_id>.jsonl` answer artifacts (T5).
+- Any committed summary metrics or charts — only the empty
+  `results/summary/` placeholder exists so far.
+- Any chunk-size / overlap tuning, or paid LLM-as-judge calls.
+
+What each of these must produce, and by when, is in
+[`docs/PROJECT_PLAN.md` §6.5](../docs/PROJECT_PLAN.md).

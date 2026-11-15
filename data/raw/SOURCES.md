@@ -1,5 +1,9 @@
 # Corpus provenance (READ THIS BEFORE ADDING DOCUMENTS)
 
+> Project definition, task ownership and the freeze rules for the formal corpus are in
+> [`docs/PROJECT_PLAN.md`](../../docs/PROJECT_PLAN.md). This file only records provenance
+> for the documents actually committed under `data/raw/`.
+
 The files in `data/raw/` are **real, publicly licensed documents**, not synthetic
 data. They are short **excerpts** of English Wikipedia articles, retrieved as
 plain text via the MediaWiki API (`action=query&prop=extracts&explaintext=1`).

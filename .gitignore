@@ -16,15 +16,22 @@ __pycache__/
 # --- generated artefacts (rebuild locally with `cli ingest`) ---
 data/index/*
 !data/index/.gitkeep
-eval/results/
 *.log
+
+# --- experiment outputs ---
+# Raw per-item outputs, logs and caches stay local. Reproducible summaries
+# (aggregate metrics, charts, config snapshots) ARE committed under
+# eval/results/summary/ -- see eval/results/README.md.
+eval/results/raw/
+eval/results/**/*.log
+eval/results/**/*.tmp
 
 # --- OS / editor ---
 .DS_Store
 .idea/
 .vscode/
 
-# --- local tool scratch (never commit) ---
+# --- local scratch (never commit) ---
 .tmp/
-# 8-character, extension-less scratch files left by some shell/agent sessions
+# eight-character, extension-less scratch files left by local tooling
 /[a-z0-9_][a-z0-9_][a-z0-9_][a-z0-9_][a-z0-9_][a-z0-9_][a-z0-9_][a-z0-9_]
