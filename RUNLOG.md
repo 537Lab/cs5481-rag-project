@@ -269,3 +269,409 @@ $ gh issue list --state open
 五个 Issue 的正文已与 `docs/PROJECT_PLAN.md`、`docs/TASKS.md` 对齐：移除预设身份标签，
 删除对不存在的旧 gold 文件（`tests/fixtures/` 下）的依赖，补上 T4 对 T1 冻结语料的依赖，
 并明确 T4 是唯一指标实现。
+
+---
+
+## 7. T4 首轮交付：评测集与指标（2026-11-14，组员实际执行）
+
+> **本节的来历**：这些内容首轮写在 `RUNLOG.md` 第 11 节（提交 `9465263`）。合并
+> `origin/main`（PR #8）时四个团队文档按「以 main 为准」处理，main 重新编排了本文件的
+> 章节，于是首轮记录被覆盖丢失。此处按新编号恢复为**历史快照**，输出内容未改写，
+> 只把交叉引用 `第 9 节` 更正为 `第 1.4 节`、把已被新提交规范取代的结果文件路径标注出来。
+> 合并事故本身的记录见第 8.7 节。
+
+环境：Windows + 仓库内 `.venv`，`Python 3.13.5`（与第 1 节探测环境的 3.13.12 不同，
+为组员本机新建的 venv）。**零付费调用**：本节所有数字都来自本地 ONNX embedding +
+本地 Chroma，无需 `OPENAI_API_KEY`。索引沿用第 1.4 节 `cli ingest` 建立的
+`chunks_fixed`（4 docs → 28 chunks），T4 未重新入库。
+
+交付：`eval/qa_set.csv`（35 条）、`eval/metrics.py`、`eval/judge_protocol.md`、
+`tests/test_eval_metrics.py`，并把 `eval/README.md` 从「只有定义、尚无实现」改写为
+「定义 + T4 实现说明」。
+
+### 7.1 验收命令（真实执行）
+
+```
+$ python -m eval.metrics --help
+usage: python -m eval.metrics [-h] [--config CONFIG] {validate,retrieval,score,mock-demo} ...
+CS5481 Topic 5 T4: QA set validation and evaluation metrics
+
+$ python -m eval.metrics validate
+exit=0
+[REAL] validated qa_set.csv: 35 items (27 answerable, 8 unanswerable)
+documents consulted: 4; all 27 gold quotes resolve to a source character span
+  bm25_wikipedia               4 answerable items
+  rag_wikipedia               10 answerable items
+  vector_db_wikipedia          8 answerable items
+  word_embedding_wikipedia     5 answerable items
+gold span sample (strategy-independent):
+  A01 rag_wikipedia chars 0-165
+  A02 rag_wikipedia chars 166-255
+  A03 rag_wikipedia chars 580-689
+unanswerable absence checks: 10 tokens confirmed absent from the corpus
+
+$ python -m pytest -o addopts="" -q tests/test_eval_metrics.py tests/test_eval_evidence.py
+exit=0
+45 passed in 0.37s
+
+$ python -m ruff check .
+All checks passed!
+
+$ python -m pytest -o addopts="" -q
+exit=0
+96 passed, 2 skipped in 4.22s
+```
+
+> 注：`pyproject.toml` 里 `addopts = "-q"`，命令行再写 `-q` 等于 `-qq`，pytest 会
+> **省略最后那行汇总**（只剩进度点）。上面的记录用 `-o addopts=""` 让汇总行显式出现；
+> 不加该参数时命令同样 `exit=0`，只是看不到计数行。
+
+### 7.2 REAL 检索命中率（真实执行，两轮结果一致）
+
+```
+$ python -m eval.metrics retrieval --hits 1,3 --min-coverage 0.5 --out eval/results/retrieval_fixed.json
+exit=0
+[REAL] retrieval evaluation: real corpus / real embeddings / real Chroma index
+    collection : chunks_fixed (chunks=28)
+    embedding  : local dim=384
+    hit@k      : levels (1, 3), min_coverage=0.5
+
+[REAL] retrieval metrics
+  min_coverage               0.5
+  n_items                    35
+  n_answerable               27
+  n_unanswerable             8
+  hit@1                       16/27  0.5926
+  hit@3                       23/27  0.8519
+
+wrote eval\results\retrieval_fixed.json
+```
+
+同一条命令连跑两轮得到完全相同的 `16/27` 与 `23/27`，命中率对本地 embedding 是
+确定性的。`eval/results/` 已在 `.gitignore` 中，结果文件不入库；报告引用时需同时
+写明上面的命令与 `--min-coverage 0.5`。结果 JSON 自带 provenance：
+
+```json
+{
+ "command": "python -m eval.metrics retrieval --hits 1,3 --min-coverage 0.5 --out eval/results/retrieval_fixed.json",
+ "config": {"corpus_manifest": "data/raw/manifest.json", "chunking": "fixed",
+            "chunk_size": 600, "chunk_overlap": 80, "collection": "chunks_fixed",
+            "embedding": "local:384d", "llm_model": "gpt-4o-mini",
+            "qa_items": 35, "python": "3.13.5"}
+}
+```
+
+> **路径已变更**：首轮写在 `eval/results/retrieval_fixed.json`。PR #8 之后提交规范要求
+> 原始逐条结果放 `eval/results/raw/`（已 gitignore），汇总放 `eval/results/summary/`（入库），
+> 而当前 `.gitignore` 只忽略 `eval/results/raw/`。第 8 节改用 `--out eval/results/raw/retrieval_fixed.json`。
+
+### 7.3 top-3 未命中的真实失败案例（供 T2/T5 分析）
+
+`first_hit_rank` 分布：rank1 = 16、rank2 = 5、rank3 = 2、top-3 内未命中 = 4（合计 27）。
+四个未命中逐个回查了索引中的块边界与实际排名（`retrieve(k=8)`）：
+
+| qid | 问题 | gold span | 能完全覆盖的块 | 该块真实排名 | 定性 |
+| --- | --- | --- | --- | --- | --- |
+| A03 | When was RAG first proposed? | `rag_wikipedia` 580–689（109 字） | `rag_wikipedia#0001`（518–1113，覆盖率 1.0） | **6**（score 0.3588） | 排序问题；top-3 只拿到部分覆盖的 `#0000`（0.1651） |
+| A14 | goal when feature vectors are computed from raw data? | `vector_db_wikipedia` 1170–1263（93 字） | `vector_db_wikipedia#0002`（1035–1635，1.0） | **4** | 差一名，top_k=4 就能命中 |
+| A17 | at query time, what is computed from the user's prompt? | `vector_db_wikipedia` 2905–3040（135 字） | `vector_db_wikipedia#0005`（2584–3179，1.0） | **8** | 纯排序问题，目标块根本不在前列 |
+| A18 | after retrieval, how does the LLM use the documents? | `vector_db_wikipedia` 3041–3221（180 字，跨块边界） | **没有单块完全覆盖**；`#0005` 0.7667 / `#0006` 0.6778 | 两者均不在 top-3 | 边界切开 + 排序双重问题 |
+
+结论（写报告时按这个口径，不要笼统归因）：
+
+- 四个 miss 中只有 A18 真正反映了**分块边界**问题；A03/A14/A17 的目标块本身完整存在、
+  覆盖率 1.0，只是没进 top-3，属于**语义排序**问题，与 chunking 策略无关，换 `paragraph`
+  不一定会好。
+- A18 也说明了为什么 hit 用 `evidence_coverage >= 0.5` 而不是「块必须包含整个 gold span」：
+  被切成 0.77 / 0.68 两块的句子，任一块都仍然包含足够语义。
+- **分数不能当取舍依据**（对 T3 直接有用，均取自首轮 `retrieval_fixed.json` 的实记数据）：
+  四个未命中查询的 top-3 score 为 `0.3932–0.5770`，而 A03/A14/A17 真正含证据的块
+  score 只有 `0.3135–0.3588`；16 个 hit@1 查询的 top-1 score 区间为 `0.3450–0.8338`，
+  27 题全部 top-3 score 区间为 `0.1934–0.8338`。三个区间相互重叠，所以加 score 阈值
+  不会把证据捞回来；提高 top_k（A14 只差一名，在 rank 4）或加关键词混合检索才是方向。
+
+### 7.4 策略切换的空索引护栏（真实执行，预期失败）
+
+```
+$ python -m eval.metrics retrieval --chunking paragraph
+exit=2
+Collection 'chunks_paragraph' is empty. Run: python -m ragkit.cli ingest (or pass --chunking paragraph)
+```
+
+collection 名由 `Settings.collection_name` 按策略派生（`chunks_<strategy>`），所以
+`--chunking paragraph` 不会读到 fixed 的索引，两种策略的数据不混。段落策略的索引
+**本机尚未建立**，因此本节没有 paragraph 的命中率——那是 T2 的实验。
+
+### 7.5 MOCK 端到端（明确标注，不得写进报告）
+
+首轮的 `mock-demo` 只跑通指标算式与 CLI 接线，`answer_correctness` 来自脚本化的
+`grades={...: "correct"}`，属于双组件自测，**不是**评测结果。完整输出可在本机重跑
+`python -m eval.metrics mock-demo --hits 1,3` 取得（第 8.6 节记录了本轮的实际输出）。
+
+### 7.6 首轮明确未执行
+
+- `python -m eval.metrics score --outputs ...`：**未真实执行**。它需要 T5 产出的
+  答案产物，当时不存在。该路径由 `tests/test_eval_metrics.py` 用合成记录覆盖
+  （含「结构校验通过但正确率为 0」的反例），加上 MOCK 端到端。
+  （本轮已用 I4 格式产物打通，见第 8.4 节。）
+- **人工 judge 尚未开始**，`eval/judge_protocol.md` 只是协议。因此
+  **`answer_correctness` 没有数字**，不是 0，也不是待填占位，就是尚未测定；
+  `metrics.py` 在没有 `--grades` 时输出 `"pending human grading"`。
+- LLM-as-judge：**未执行**（无密钥、未经全组确认费用），条件见 `judge_protocol.md` §4。
+- `paragraph` 策略的命中率：**未测定**（本机无该 collection）。
+- 评分者一致性（raw agreement / Cohen's kappa）：**未计算**，需要两份人评 grades 文件。
+
+---
+
+## 8. T4 同步修订：按 PR #8 的 I3 / I4 / I5 接口对齐（2026-11-15，组员实际执行）
+
+组员对 PR #8 提了 5 条意见，本轮逐条处理；**原有代码与测试保留**，只改与接口不一致的局部。
+执行环境与首轮相同（Windows + `.venv` + Python 3.13.5，本地 ONNX embedding + 本地 Chroma，**零付费调用**）。
+
+| # | 组员意见 | 本轮做法 | 锁定它的测试 |
+| --- | --- | --- | --- |
+| 1 | 分支与 main 有 4 个文档冲突 | `git merge origin/main`（合并提交 `0123745`），4 个冲突文件均**以 main 为准**；丢失的首轮记录恢复为第 7 节 | —（文档） |
+| 2 | 支持 JSONL 与 `retrieved_chunk_ids` | `score --run-id <id>` 读 `eval/answers/<id>.jsonl`，嵌套 `answer` 扁平化，旧键 `retrieved_ids` 仍接受 | `test_jsonl_artifact_is_read_and_the_nested_answer_is_flattened`、`test_an_i4_record_scores_exactly_like_the_earlier_flat_record` |
+| 3 | 正确率分母不能含不可回答题 | 分母改为**已评分的 answerable 题**；新增 `n_gradable` / `grading_coverage` / `grades_dropped_as_unanswerable` | `test_unanswerable_grades_never_enter_the_correctness_denominator`、`test_grading_coverage_exposes_the_ungraded_remainder` |
+| 4 | `ABSENT_TOKENS` 只是必要条件 | 文档说明 + 机器门：每条拒答题需 `REVIEWED_BY: <name>` 佐证，`--require-reviewed` 与 `--formal` 都会卡住 | `test_formal_review_gate_is_currently_closed_on_the_committed_set`（有意的翻转门） |
+| 5 | 指标函数名跟新项目方案统一 | 按 I3 只暴露 `retrieval_hit_rate` / `answer_correctness` / `abstention_rates` / `citation_structure_rate` 四个公开函数，两个聚合器变薄（只加逐条行与 provenance，不定义第二套公式） | `test_i3_functions_are_importable_with_the_frozen_names`、`test_the_public_function_and_the_aggregator_return_the_same_numbers` |
+
+同时按 I5 字段名重写了配置快照（`strategy/size/overlap/top_k/min_coverage/embedding/llm/corpus_ref/qa_set_ref`），
+并新增 `--summary-dir/--formal/--executor` 写出 `eval/results/README.md` 要求的 `config.json` /
+`metrics.json` / `run.md` 三件套。35 题按组员补充说明被定位为 **`CORPUS_V0` 上的开发测试集**
+（`QA_SET_STATUS` 常量与 `validate` 输出都写明），正式数据集冻结后再重验 gold 引文。
+
+### 8.1 验收命令（真实执行）
+
+```
+$ python -m ruff check .
+exit=0
+All checks passed!
+
+$ python -m pytest -o addopts="" -q tests/test_eval_metrics.py
+exit=0
+67 passed in 0.40s
+
+$ python -m pytest -o addopts="" -q tests/test_eval_metrics.py tests/test_eval_evidence.py
+exit=0
+73 passed in 0.44s
+
+$ python -m pytest -o addopts="" -q
+exit=0
+124 passed, 2 skipped in 5.04s
+```
+
+验收双文件从首轮 45 passed 到 73 passed（+28 例），全量从 96 到 124（同样 +28）；新增全部落在
+`tests/test_eval_metrics.py`（首轮 39 例 → 67 例）。本轮未删除任何首轮测试，
+首轮用例全部仍在上述计数内。那 2 个 skipped 与首轮同源，不是本轮新增的：
+`tests/test_e2e_real.py` 的真实端到端用例需要 `RUN_REAL_E2E=1` 才跑（其中一个还要 `OPENAI_API_KEY`），本机未开启。
+
+### 8.2 意见 5：I3 函数名（真实执行）
+
+```
+$ python -m eval.metrics validate
+exit=0
+[REAL] validated qa_set.csv: 35 items (27 answerable, 8 unanswerable)
+documents consulted: 4; all 27 gold quotes resolve to a source character span
+  bm25_wikipedia               4 answerable items
+  rag_wikipedia               10 answerable items
+  vector_db_wikipedia          8 answerable items
+  word_embedding_wikipedia     5 answerable items
+gold span sample (strategy-independent):
+  A01 rag_wikipedia chars 0-165
+  A02 rag_wikipedia chars 166-255
+  A03 rag_wikipedia chars 580-689
+unanswerable absence checks: 10 tokens confirmed absent from the corpus - a NECESSARY condition only, the absence of a word does not prove the corpus cannot answer the question
+human review of unanswerable labels: 0/8 carry REVIEWED_BY (pending: N01, N02, N03, N04, N05, N06, N07, N08)
+corpus checked against: data/raw/manifest.json@b5bfc0d70e4a; frozen snapshot (I1) absent: data/raw/frozen_manifest.json
+QA set status: development set on CORPUS_V0, not the frozen formal QA set
+```
+
+`eval/metrics.py` 顶部现在直接定义这四个名字，`from eval.metrics import retrieval_hit_rate,
+answer_correctness, abstention_rates, citation_structure_rate` 即可（已有单测逐项验证）。
+
+命中率**本轮重算与首轮一致**（分母本来就是 27 题，改动不影响检索侧）：
+
+```
+$ python -m eval.metrics retrieval --hits 1,3 --min-coverage 0.5 --out eval/results/raw/retrieval_fixed.json
+exit=0
+[REAL] retrieval evaluation: real corpus / real embeddings / real Chroma index
+    collection : chunks_fixed (chunks=28)
+    embedding  : local dim=384
+    hit@k      : levels (1, 3), min_coverage=0.5
+
+[REAL] retrieval metrics
+  min_coverage               0.5
+  n_items                    35
+  n_answerable               27
+  n_unanswerable             8
+  hit@1                       16/27  0.5926
+  hit@3                       23/27  0.8519
+
+wrote eval\results\raw\retrieval_fixed.json
+```
+
+### 8.3 意见 2：接口 I4 产物端到端（真实执行）
+
+为了在 T5 交付前就把链路跑通，本轮用 `.tmp/make_i4_artifact.py` 造了一个**严格符合 I4 形状**的
+产物：检索环节是真的（直接读 `chunks_fixed` 索引的 top-3），答案文本由脚本从检索块拼接而来，
+`model` 字段写明 `scripted-mock-generator`。**它只证明管道能读能算，不是实验结果**，所以始终带
+`--label MOCK` 跑，跑完从 `eval/answers/` 删除（MOCK 产物不能占着 T5 要交的位置）。
+
+一行记录的实际形状（A01）：
+
+```json
+{
+ "qid": "A01",
+ "answer": {
+  "answer_text": "…", "abstained": false,
+  "citations": [{"chunk_id": "rag_wikipedia#0001", "doc_id": "rag_wikipedia", "quote": "…"}],
+  "model": "scripted-mock-generator", "raw": "…"
+ },
+ "retrieved_chunk_ids": ["rag_wikipedia#0001", "rag_wikipedia#0000", "rag_wikipedia#0002"],
+ "run_id": "20261115-mock-i4",
+ "config_ref": "eval/results/summary/example/config.json"
+}
+```
+
+```
+$ python -m eval.metrics score --run-id 20261115-mock-i4 --label MOCK
+exit=0
+[MOCK] scoring answer run: eval/answers/20261115-mock-i4.jsonl (run_id=20261115-mock-i4, records=35)
+[MOCK] answers metrics
+  min_coverage               0.5
+  n_items                    35
+  n_answerable               27
+  n_unanswerable             8
+  correct_abstention_rate      8/8   1.0000
+  false_abstention_rate        0/27  0.0000
+  citation_structure_rate     27/27  1.0000
+  answer_correctness         pending human grading (no --grades file supplied)
+  n_graded                   0
+  n_gradable                 27
+  grading_coverage             0/27  0.0000
+  grade_counts               {'correct': 0, 'incorrect': 0, 'unsure': 0}
+  hit@1                       16/27  0.5926
+  hit@3                       23/27  0.8519
+```
+
+上面的 `8/8` 与 `27/27` 是脚本化双组件自己写的产物，**不能当系统能力引用**：前者是因为脚本对
+每条 N 题都设了 `abstained=true`，后者是因为引用直接从检索块拷出来。它们的作用只有一个：证明
+`retrieved_chunk_ids` → 结构校验、`abstained` → 拒答率这两条读取路径接得住。
+
+评分表的来回也真实跑了一次（未填任何分数，因此不会凭空产生正确率）：
+
+```
+$ python -m eval.metrics score --run-id 20261115-mock-i4 --label MOCK --grading-sheet .tmp/grades_sheet.csv
+exit=0
+（同上指标输出）
+wrote grading sheet .tmp\grades_sheet.csv
+
+$ python -m eval.metrics score --run-id 20261115-mock-i4 --label MOCK --grades .tmp/grades_sheet.csv
+exit=2
+ERROR: .tmp\grades_sheet.csv has no graded rows; every grade cell is empty
+```
+
+即：空评分表**不会被当成「全错」**，而是直接拒绝。以下三个护栏也都真实碰过：
+
+```
+$ python -m eval.metrics score --run-id no-such-run
+exit=2
+ERROR: no answer artifact for --run-id 'no-such-run' in eval/answers: no-such-run.jsonl, no-such-run.ndjson, no-such-run.json
+
+$ python -m eval.metrics score
+exit=2
+ERROR: score needs --outputs PATH or --run-id ID (see eval/answers/)
+
+$ python -m eval.metrics score --run-id some-other-run --outputs <root>/.tmp/answers/20261115-mock-i4.jsonl
+exit=2
+ERROR: --run-id 'some-other-run' does not match the run_id '20261115-mock-i4' recorded in .tmp/answers/20261115-mock-i4.jsonl
+```
+
+本轮自查补上的一个诚实护栏：脚本化产物的 `model` 名字自己报 mock，但命令默认 `--label REAL` 会把
+一次管道测试打成 REAL。现在 `score` 会把这件事说出来（不改变退出码，不静默修正用户显式声明的标签）：
+
+```
+$ python -m eval.metrics score --run-id 20261115-mock-i4
+exit=0
+[REAL] scoring answer run: eval/answers/20261115-mock-i4.jsonl (run_id=20261115-mock-i4, records=35)
+（指标同上）
+WARNING: --label REAL, but every record in this artifact names a scripted double (scripted-mock-generator). Pass --label MOCK: these numbers test the plumbing, they are not an experiment result.
+```
+
+### 8.4 意见 4：拒答标注的复核门（真实执行，预期失败）
+
+```
+$ python -m eval.metrics validate --require-reviewed
+exit=2
+ERROR: unanswerable item(s) without a human REVIEWED_BY attestation: N01, N02, N03, N04, N05, N06, N07, N08 - absent tokens are a necessary condition, not proof that the corpus cannot answer
+
+$ python -m eval.metrics retrieval --summary-dir eval/results/summary/dev_try
+exit=2
+ERROR: --summary-dir needs --formal: development numbers stay in eval/results/raw/ (see eval/results/README.md)
+
+$ python -m eval.metrics retrieval --summary-dir eval/results/summary/dev_try --formal
+exit=2
+ERROR: --formal refused, this run is not on frozen inputs yet:
+  - data/raw/frozen_manifest.json is missing: the I1 corpus snapshot is not frozen yet
+  - unanswerable item(s) without a REVIEWED_BY attestation: N01, N02, N03, N04, N05, N06, N07, N08
+Development numbers belong in eval/results/raw/ via --out, not in summary/.
+```
+
+这三处拒绝都**不是实现缺陷**，而是当前仓库状态的如实反映：`frozen_manifest.json` 不存在（I1 未冻结），
+8 条 `unanswerable` 标注**目前没有任何一个组员签名**。所以下面这些数字现在都只能标为 provisional：
+
+- `correct_abstention_rate` / `false_abstention_rate`：依赖「这 8 题真的无法回答」这个尚未复核的前提。
+- `answer_correctness`：本轮**仍无数字**（`pending human grading`，`grading_coverage 0/27`）。
+
+### 8.5 本轮明确未执行 / 未做
+
+- `--summary-dir` + `--formal` 的**成功**路径：未执行，因为两个前提（I1 冻结、拒答复核）都还没满足；
+  代码路径由 `tests/test_eval_metrics.py` 用临时目录覆盖（五件套字段、MOCK 拒写）。
+- `score` 对 **REAL 答案产物**的打分：未执行。需要 T5 用真 LLM 产出 `eval/answers/<run_id>.jsonl`。
+- `paragraph` 策略命中率：仍未测定（本机无该 collection）。
+- 人工 judge：仍未开始；本轮只交付了可从 I4 产物一键生成评分表的能力（§8.3）。
+- 35 题在冻结语料上的重新校对：未做，等 T1 的 I1 快照。
+
+### 8.6 MOCK 端到端（本轮重跑，与首轮的差别只在新增的 coverage 字段）
+
+```
+$ python -m eval.metrics mock-demo --hits 1,3
+exit=0
+==============================================================================
+[MOCK] metric code exercise: fixtures + scripted doubles. NOT an experiment.
+==============================================================================
+[MOCK] answers metrics
+  min_coverage               0.5
+  n_items                    3
+  n_answerable               2
+  n_unanswerable             1
+  correct_abstention_rate      1/1   1.0000
+  false_abstention_rate        0/2   0.0000
+  citation_structure_rate      2/2   1.0000
+  answer_correctness           2/2   1.0000
+  n_graded                   2
+  n_gradable                 2
+  grading_coverage             2/2   1.0000
+  grade_counts               {'correct': 2, 'incorrect': 0, 'unsure': 0}
+  hit@1                        1/2   0.5000
+  hit@3                        2/2   1.0000
+
+These numbers describe MOCK fixtures only. Do not put them in the report.
+```
+
+### 8.7 合并事故：首轮文档记录被覆盖（如实记录）
+
+意见 1 处理冲突时，`RUNLOG.md`、`docs/DEV_LOG.md`、`docs/AI_USAGE.md`、`eval/README.md` 四个文件
+两边都改过，本轮选了 `git checkout --theirs`（以 main 的新编排为准）。这个选择有一个副作用：
+首轮写在这三个文件里的 T4 记录（旧 `RUNLOG.md` 第 11 节、`DEV_LOG.md` 的 T4 行、`AI_USAGE.md` 的
+组员追加表）**全部丢失**。代码与测试不受影响（它们在 `eval/` 下，没冲突）；
+`eval/README.md` 属于另一种情况：main 已经重写过该文件，本轮只在其新结构上补 I3/I4/I5 口径，
+不算丢内容。
+
+处理：第 7 节按新编号恢复首轮快照（输出原文未改），本轮与首轮的组员记录已补回
+`docs/DEV_LOG.md` 与 `docs/AI_USAGE.md`。
+
+给后面合并同一个仓库的人一句提示：解冲突时先 `git show <自己的提交>:<文件>` 看一眼自己写过什么，
+`--theirs` 不是免费的。
+
