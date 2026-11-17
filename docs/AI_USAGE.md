@@ -55,3 +55,21 @@
 不要把示例句直接照抄：除 T4 之外，其余组员尚未开始开发，上表里的验证命令**全部是 AI Agent
 而非组员本人跑出来的**，而正式的实验数据（冻结语料上的命中率与人工评分的正确率）至今为 0。
 贡献比例页须在全员开工后据实填写。
+
+
+## T3 追加记录 / T3 disclosure（2026-11-18）
+
+本节为追加，不覆盖以上历史记录或替其他成员确认贡献。当前 T3 分支是 `t3-retrieval-diagnostics`，关联 Issue #3。
+
+| 实际执行者 / Tool | 用途 | 已核实的模型配置与证据 | 人工环节 |
+| --- | --- | --- | --- |
+| Hermes 主控（当前会话报告 `gpt-6.1-sol`） | 核对最新 main/任务与权限，设计及实现诊断、测试、文档，整合并实跑 | 主控模型按会话标识记录；不将 CLI 子进程的推理档位冒充主会话已独立核验的档位 | 本人读代码、亲自跑关键命令与理解检查 **待完成** |
+| Codex CLI Repository Explorer | 只读调用链与测试边界调查 | `--model gpt-6-luna -c model_reasoning_effort="high"`；实际启动头显示 Luna / high，冒烟返回 SMOKE_OK | 不是组员人工 review |
+| Codex CLI Implementation / Review-fix Workers | 独立文件所有权下实现 store/embeddings 和其测试；审查后修复真实缺陷 | `gpt-6.1-sol / medium`，实际启动头验证；未让全部子任务继承 Sol High | 主控集成与复跑，不能记作本人亲手执行 |
+| 独立 Codex CLI Reviewer | 读实际 diff、新文件、真实调用链与测试，复现问题 | `gpt-6.1-sol / high`，实际启动头验证；首轮指出交错客户端策略污染、float32 数值问题及分箱边界等，修复与复查记录以 PR 为准 | AI 审查不替代另一位组员 Approve |
+
+- 本轮未改全局 Codex 配置、Agent Policy、共享契约、其他成员核心代码或依赖文件，未切换账号/启用额外付费额度。
+- 初次边界测试漏设本地替身，意外触发免费模型下载；随后已修正测试并重跑。不能声称整个开发过程从未联网。真实本地 ONNX 检索本身也与离线 MOCK 测试分开记录。
+- 输入为开发语料 `CORPUS_V0` 和现有 T4 开发 QA；没有生成/修改 gold 或伪造人工 `REVIEWED_BY`，不把机械字符定位写成人工 gold 质量复核。没有真实调用收费 Embedding / LLM / judge API；编码助手使用的是本轮明确授权的 Codex。
+- Agent 实际执行了 pytest、Ruff、CLI、35 题本地诊断及双 collection 的独立进程持久化检查；最终命令/计数、审查修复和远端状态见本 PR、`DEV_LOG.md` 与 `RETRIEVAL.md`。未声明本人已亲自复跑或签字。
+- 修复后独立 Sol High 终审实际通过三个受影响文件 143 项测试并核验真实运行指纹；主控再核对六份源码/测试哈希未改变，且追加了真实 Chroma 跨进程协作写入检查。以上仍是机器验证，不记成人工批准。
