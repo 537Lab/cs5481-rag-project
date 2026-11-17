@@ -2,16 +2,30 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
+from eval.chunking_experiment import (
+    DEVELOPMENT_LABEL,
+    build_payload,
+    compare_retrieval,
+    length_stats,
+    main,
+    resolve_destination,
+    settings_for_strategy,
+    write_result,
+)
+from eval.evidence import locate_evidence
+from eval.metrics import QAItem, QASetError, load_qa, retrieval_hit_rate
 from ragkit.chunking import (
     ChunkConfig,
     FixedSizeChunker,
     ParagraphChunker,
     build_chunker,
 )
-from ragkit.config import ROOT
-from ragkit.contracts import Document
+from ragkit.config import ROOT, load_settings
+from ragkit.contracts import Chunk, Document, RetrievedChunk
 from ragkit.loaders import load_documents
 
 
@@ -118,3 +132,221 @@ def test_build_chunker_factory():
     assert isinstance(build_chunker("paragraph"), ParagraphChunker)
     with pytest.raises(ValueError, match="unknown chunking strategy"):
         build_chunker("magic")
+
+
+def test_length_stats_match_the_chunks():
+    doc = Document(doc_id="stats", title="Stats", text="word " * 80)
+    chunks = FixedSizeChunker(ChunkConfig(size=50, overlap=0)).split(doc)
+    stats = length_stats(chunks)
+    lengths = [len(chunk.text) for chunk in chunks]
+    assert stats == {
+        "chunk_count": len(chunks),
+        "length_min": min(lengths),
+        "length_max": max(lengths),
+        "length_mean": round(sum(lengths) / len(lengths), 4),
+    }
+
+
+def test_both_strategies_share_size_overlap_and_top_k():
+    base = load_settings()
+    fixed = settings_for_strategy(base, "fixed", size=400, overlap=40, top_k=3)
+    paragraph = settings_for_strategy(base, "paragraph", size=400, overlap=40, top_k=3)
+    assert fixed.chunk_size == paragraph.chunk_size == 400
+    assert fixed.chunk_overlap == paragraph.chunk_overlap == 40
+    assert fixed.top_k == paragraph.top_k == 3
+    assert fixed.embedding_provider == paragraph.embedding_provider
+    assert fixed.collection_name == "chunks_fixed"
+    assert paragraph.collection_name == "chunks_paragraph"
+
+
+def _slice(doc: Document, start: int, end: int, strategy: str, index: int) -> Chunk:
+    return Chunk(
+        chunk_id=f"{doc.doc_id}#{index:04d}",
+        doc_id=doc.doc_id,
+        text=doc.text[start:end],
+        char_start=start,
+        char_end=end,
+        strategy=strategy,
+        index=index,
+        title=doc.title,
+    )
+
+
+def _hit(chunk: Chunk, score: float, rank: int) -> RetrievedChunk:
+    return RetrievedChunk(chunk=chunk, score=score, rank=rank)
+
+
+def test_comparison_copies_hit_rates_and_reports_disagreement():
+    text = "The alpha service listens on port 8080. The beta service does not."
+    doc = Document(doc_id="svc", title="Svc", text=text)
+    alpha = "The alpha service listens on port 8080."
+    beta = "The beta service does not."
+    spans = {
+        "Q1": locate_evidence([doc], "svc", alpha),
+        "Q2": locate_evidence([doc], "svc", beta),
+    }
+    items = [
+        QAItem("Q1", "Which port does alpha use?", "8080", "svc", alpha, "answerable", ""),
+        QAItem("Q2", "What does the beta sentence say?", "does not", "svc", beta, "answerable", ""),
+    ]
+    alpha_end = len(alpha)
+    beta_start = text.index(beta)
+    cover_alpha = _slice(doc, 0, alpha_end, "fixed", 0)
+    cover_beta = _slice(doc, beta_start, len(text), "fixed", 1)
+    miss = _slice(doc, beta_start, len(text), "paragraph", 0)
+    hits = {
+        "fixed": {
+            "Q1": [_hit(cover_alpha, 0.9, 1)],
+            "Q2": [_hit(cover_beta, 0.8, 1)],
+        },
+        "paragraph": {
+            "Q1": [_hit(miss, 0.7, 1), _hit(miss, 0.6, 2), _hit(miss, 0.5, 3)],
+            "Q2": [_hit(cover_beta, 0.9, 1)],
+        },
+    }
+    stats = {
+        "fixed": {"chunk_count": 2, "length_min": 10, "length_max": 20, "length_mean": 15.0},
+        "paragraph": {"chunk_count": 4, "length_min": 8, "length_max": 30, "length_mean": 16.0},
+    }
+    min_coverage = 0.5
+    comparison = compare_retrieval(
+        items, spans, hits, stats, hit_levels=(1, 3), min_coverage=min_coverage
+    )
+    by_strategy = {row["strategy"]: row for row in comparison["strategies"]}
+    for strategy, retrieved in hits.items():
+        direct = retrieval_hit_rate(
+            items, spans, retrieved, hit_levels=(1, 3), min_coverage=min_coverage
+        )
+        assert by_strategy[strategy]["hit@1"] == direct["rates"]["hit@1"]
+        assert by_strategy[strategy]["hit@3"] == direct["rates"]["hit@3"]
+        assert by_strategy[strategy]["chunk_count"] == stats[strategy]["chunk_count"]
+    assert comparison["min_coverage"] == min_coverage
+    assert by_strategy["fixed"]["hit@1"] == {"hits": 2, "n": 2, "rate": 1.0}
+    assert by_strategy["paragraph"]["hit@1"] == {"hits": 1, "n": 2, "rate": 0.5}
+    cases = [case for case in comparison["disagreements"] if case["qid"] == "Q1"]
+    assert {case["level"] for case in cases} == {"hit@1", "hit@3"}
+    assert all(case["by_strategy"]["fixed"]["hit"] for case in cases)
+    assert all(not case["by_strategy"]["paragraph"]["hit"] for case in cases)
+    assert cases[0]["gold_span"] == [spans["Q1"].char_start, spans["Q1"].char_end]
+
+
+def test_help_exits_zero():
+    with pytest.raises(SystemExit) as caught:
+        main(["--help"])
+    assert caught.value.code == 0
+
+
+def test_development_destination_does_not_create_summary(tmp_path):
+    summary = tmp_path / "summary" / "chunking_comparison"
+    raw = tmp_path / "raw" / "chunking_comparison"
+    destination = resolve_destination(
+        formal=False,
+        settings=load_settings(),
+        items=load_qa(),
+        summary_dir=summary,
+        raw_dir=raw,
+    )
+    assert destination == raw
+    assert raw.is_dir()
+    assert not summary.exists()
+
+
+def test_formal_refuses_before_creating_summary(tmp_path):
+    summary = tmp_path / "summary" / "chunking_comparison"
+    with pytest.raises(QASetError, match="not on frozen inputs"):
+        resolve_destination(
+            formal=True,
+            settings=load_settings(),
+            items=load_qa(),
+            summary_dir=summary,
+            raw_dir=tmp_path / "raw",
+        )
+    assert not summary.exists()
+    assert not (tmp_path / "raw").exists()
+
+
+def test_summary_dir_without_formal_is_refused(tmp_path):
+    summary = tmp_path / "summary" / "chunking_comparison"
+    assert main(["--summary-dir", str(summary)]) == 2
+    assert not summary.exists()
+
+
+def test_development_writer_does_not_emit_a_summary_bundle(tmp_path):
+    payload = {
+        "label": DEVELOPMENT_LABEL,
+        "formal": False,
+        "note": "开发用",
+        "generated_at": "2026-11-17T00:00:00+00:00",
+        "command": "python -m eval.chunking_experiment",
+        "shared": {},
+        "configs": {},
+        "strategies": [],
+        "disagreements": [],
+        "judge": "not applicable",
+    }
+    written = write_result(payload, tmp_path / "raw" / "chunking_comparison", formal=False)
+    assert [path.name for path in written] == ["comparison.json"]
+    assert not (tmp_path / "summary").exists()
+    with pytest.raises(QASetError, match="non-formal"):
+        write_result(payload, tmp_path / "summary" / "chunking_comparison", formal=True)
+    assert not (tmp_path / "summary").exists()
+
+
+def test_payload_rejects_strategies_that_do_not_share_parameters():
+    comparison = {"strategies": [], "disagreements": []}
+    configs = {
+        "fixed": {"size": 400, "overlap": 40, "top_k": 3, "min_coverage": 0.5,
+                  "embedding": "local:all-MiniLM-L6-v2", "qa_set_ref": "qa@abc"},
+        "paragraph": {"size": 200, "overlap": 40, "top_k": 3, "min_coverage": 0.5,
+                      "embedding": "local:all-MiniLM-L6-v2", "qa_set_ref": "qa@abc"},
+    }
+    with pytest.raises(QASetError, match="size"):
+        build_payload(
+            comparison,
+            configs,
+            command="python -m eval.chunking_experiment",
+            formal=False,
+        )
+
+
+def test_formal_bundle_keeps_the_hit_rate_objects(tmp_path):
+    hit_at_1 = {"hits": 1, "n": 2, "rate": 0.5}
+    hit_at_3 = {"hits": 2, "n": 2, "rate": 1.0}
+    payload = {
+        "label": "FORMAL",
+        "formal": True,
+        "note": None,
+        "generated_at": "2026-11-17T00:00:00+00:00",
+        "command": "python -m eval.chunking_experiment --formal",
+        "shared": {
+            "size": 600,
+            "overlap": 80,
+            "top_k": 3,
+            "min_coverage": 0.5,
+            "embedding": "local:all-MiniLM-L6-v2",
+            "corpus_ref": "fixture",
+            "corpus_frozen": True,
+            "qa_set_ref": "fixture",
+            "qa_set_status": "test",
+        },
+        "configs": {},
+        "strategies": [
+            {
+                "strategy": "fixed",
+                "chunk_count": 2,
+                "length_min": 10,
+                "length_max": 20,
+                "length_mean": 15.0,
+                "hit@1": hit_at_1,
+                "hit@3": hit_at_3,
+            }
+        ],
+        "disagreements": [],
+        "judge": "not applicable: retrieval-only comparison",
+    }
+    directory = tmp_path / "chunking_comparison"
+    write_result(payload, directory, formal=True)
+    metrics = json.loads((directory / "metrics.json").read_text(encoding="utf-8"))
+    assert metrics["strategies"][0]["hit@1"] == hit_at_1
+    assert metrics["strategies"][0]["hit@3"] == hit_at_3
+    assert "answer_correctness" not in metrics

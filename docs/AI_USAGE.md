@@ -45,6 +45,13 @@
 > 直接影响命中率与正确率的可信度）；`judge_protocol.md` 规定 LLM 不得用于编撰或审查 gold quote。
 > 两轮均**零付费 API 调用**，`answer_correctness` 尚无数字（人评未开始）。
 
+## 组员追加记录（T2，任务包 #2）
+
+| 日期 | 任务包 | AI / Agent 名称 | 具体用途（生成什么、改哪些文件） | 我亲自复核了什么 | 我亲自跑了哪些命令 | 云端 CI 结果 | PR 号 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-11-17 | T2 | Cursor Grok 4.7（编码 agent） | 新增 `eval/chunking_experiment.py` 与 `docs/CHUNKING_EXPERIMENT.md`；`ragkit/chunking.py` 只改模块说明；测试加在 `tests/test_chunking.py`。命中率调用 `eval.metrics.retrieval_hit_rate`，未改 `metrics.py`。开发数字只写进 gitignore 的 `eval/results/raw/`，未写入 `summary/` | 代码是 agent 写的。组员随后重跑了验收命令，见下一行；逐行阅读代码没有单独留下记录 | agent 先跑过一轮，输出在 `RUNLOG.md` 第 9 节。组员重跑见下一行，不要把两轮记成同一次 | 待本分支 PR 的 `ci / check` | 分支 `t2-chunking-experiment`，尚未开 PR |
+| 2026-11-17 20:50 GMT+8 | T2 | 同上；本行是组员自己重跑，不是又一次生成代码 | 未改代码。在仓库根目录、已激活 `.venv` 的终端重跑任务卡上的验收命令 | 重跑了命令。终端里留存的最后一条是 `python -m eval.chunking_experiment`，exit 0。`comparison.json` 的 `generated_at` 为 `2026-11-17T12:50:10+00:00`，hit@1 / hit@3 与 20:43 的 agent 运行相同 | 组员本人重跑：`python -m pytest tests/test_chunking.py -q`、`python -m pytest -q`、`ruff check .`、`python -m eval.chunking_experiment --help`、`python -m eval.chunking_experiment`。屏幕上只留住了最后一条实验命令（exit 0）；pytest、ruff、`--help` 的通过行数没有留在终端记录里，这里不补写 | 仍待 PR 的 `ci / check` | 尚未开 PR |
+
 ## 写报告时建议披露的句子（示例，必须按实际情况改写）
 
 > 本项目的基础工程脚手架、单元测试与部分文档由 AI 编码助手在仓库账号持有人授权下生成，
@@ -52,6 +59,6 @@
 > 各模块后续实现由对应负责人审阅、修改并亲自运行验证。实验数据均来自本组实际执行的命令，
 > 未使用 AI 生成的模拟结果。各成员贡献比例与签名见本报告最后一页。
 
-不要把示例句直接照抄：除 T4 之外，其余组员尚未开始开发，上表里的验证命令**全部是 AI Agent
-而非组员本人跑出来的**，而正式的实验数据（冻结语料上的命中率与人工评分的正确率）至今为 0。
+不要把示例句直接照抄。T4 的验证命令仍是编码 agent 跑的。T2 的第一行也是 agent 跑的；第二行才是组员本人于 2026-11-17 20:50 重跑验收命令，其中只有 `python -m eval.chunking_experiment` 的退出码和 JSON 时间戳留在本机记录里。
+T2 的 hit@k 仍是开发集上的检索，不是冻结语料上的正式实验；回答正确率至今为 0。
 贡献比例页须在全员开工后据实填写。

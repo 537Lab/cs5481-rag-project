@@ -16,8 +16,9 @@ Overlap semantics are SHARED by both strategies: consecutive chunks repeat
 overlap and the ACTUAL overlap measured from the emitted ranges, so metadata can
 never claim an overlap that did not happen.
 
-These are scaffolds, NOT the assignment's formal comparison experiment. The
-experiment (metrics, >=20 QA pairs, reporting) belongs to a later PR.
+The comparison of these two strategies lives in `eval/chunking_experiment.py`.
+That driver calls `eval.metrics.retrieval_hit_rate` and does not score the
+strategies here. This module stays a pure chunker.
 
 Invariant guaranteed by BOTH strategies:
     document.text[chunk.char_start:chunk.char_end] == chunk.text
