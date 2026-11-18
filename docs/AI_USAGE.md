@@ -45,6 +45,12 @@
 > 直接影响命中率与正确率的可信度）；`judge_protocol.md` 规定 LLM 不得用于编撰或审查 gold quote。
 > 两轮均**零付费 API 调用**，`answer_correctness` 尚无数字（人评未开始）。
 
+## 组员追加记录（T1，正式语料快照）
+
+| 日期 | 任务包 | AI / Agent 名称 | 具体用途（生成什么、改哪些文件） | 我亲自复核了什么 | 我亲自跑了哪些命令 | 云端 CI 结果 | PR 号 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-11-19 | T1 | OpenAI Codex（编码 agent） | 按全组确认的 Kubernetes v1.35 方向核验 CC BY 4.0 许可与 12 个固定来源；改写采集脚本；生成正式语料、`manifest.json`、`frozen_manifest.json`、来源表与统计文档；定位并最小修正 T4 开发 QA 的两处集成冲突 | **尚未由负责人逐项人工复核**；需在 PR review 时抽查固定来源、清洗前后正文、SHA-256 和 T4 兼容修正 | 无；以下均由 Codex 在本机执行：两次 `fetch_corpus.py` 与全量哈希比较、`pytest`、`ruff check .`、真实 `cli ingest`（16 文档 → 651 chunks）、真实 `cli retrieve` | 待本 PR 的 `ci / check` | 分支 `t1-corpus-kubernetes-v135` |
+
 ## 写报告时建议披露的句子（示例，必须按实际情况改写）
 
 > 本项目的基础工程脚手架、单元测试与部分文档由 AI 编码助手在仓库账号持有人授权下生成，
