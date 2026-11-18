@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 
 import pytest
@@ -10,7 +11,9 @@ from ragkit.config import ROOT
 from ragkit.loaders import load_documents, load_manifest
 
 REAL_MANIFEST = ROOT / "data" / "raw" / "manifest.json"
+FROZEN_MANIFEST = ROOT / "data" / "raw" / "frozen_manifest.json"
 MOCK_MANIFEST = ROOT / "tests" / "fixtures" / "manifest.json"
+K8S_COMMIT = "8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564"
 
 
 def test_real_manifest_declares_provenance():
@@ -27,6 +30,30 @@ def test_load_real_documents():
     assert all(len(doc.text) > 500 for doc in documents)
     assert all(doc.source_uri and doc.license for doc in documents)
     assert len({doc.doc_id for doc in documents}) == len(documents)
+
+
+def test_formal_kubernetes_corpus_is_pinned_and_licensed():
+    entries = load_manifest(REAL_MANIFEST)
+    formal = [entry for entry in entries if entry["doc_id"].startswith("k8s_v135_")]
+
+    assert len(formal) == 12
+    for entry in formal:
+        assert entry["license"] == "CC BY 4.0"
+        assert entry["version"] == f"snapshot-initial-v1.35@{K8S_COMMIT}"
+        assert K8S_COMMIT in entry["source_uri"]
+
+
+def test_frozen_manifest_hashes_match_committed_documents():
+    frozen = json.loads(FROZEN_MANIFEST.read_text(encoding="utf-8"))
+    entries = load_manifest(REAL_MANIFEST)
+
+    assert frozen["corpus_id"].startswith("cs5481-k8s-v135-16docs-")
+    assert frozen["source_commit"] == K8S_COMMIT
+    assert len(frozen["documents"]) == len(entries) == 16
+    for record in frozen["documents"]:
+        document_path = REAL_MANIFEST.parent / record["path"]
+        digest = hashlib.sha256(document_path.read_bytes()).hexdigest()
+        assert digest == record["sha256"], record["doc_id"]
 
 
 def test_load_mock_fixtures_are_labelled():
