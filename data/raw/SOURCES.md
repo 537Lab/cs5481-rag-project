@@ -8,22 +8,22 @@
 - Tag: `snapshot-initial-v1.35`
 - Pinned commit: `8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564`
 - Licence: [CC BY 4.0](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/LICENSE)
-- Changes: removed YAML front matter, HTML comments, and Hugo presentation shortcodes; kept prose, headings, tables, links, and code blocks.
+- Changes: inlined shared prerequisites and code samples from the same commit; removed YAML front matter, HTML comments, and presentation-only shortcode wrappers; kept prose, headings, tables, links, and code blocks.
 
 | doc_id | Title | Clean chars | Pinned source |
 | --- | --- | ---: | --- |
-| `k8s_v135_components` | Kubernetes Components | 2704 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/overview/components.md) |
+| `k8s_v135_components` | Kubernetes Components | 2754 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/overview/components.md) |
 | `k8s_v135_nodes` | Nodes | 13523 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/architecture/nodes.md) |
-| `k8s_v135_pods` | Pods | 22615 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/workloads/pods/_index.md) |
-| `k8s_v135_deployments` | Deployments | 57181 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/workloads/controllers/deployment.md) |
-| `k8s_v135_services` | Services | 42412 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/services-networking/service.md) |
-| `k8s_v135_configmaps` | ConfigMaps | 11911 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/configuration/configmap.md) |
+| `k8s_v135_pods` | Pods | 22812 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/workloads/pods/_index.md) |
+| `k8s_v135_deployments` | Deployments | 57545 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/workloads/controllers/deployment.md) |
+| `k8s_v135_services` | Services | 42606 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/services-networking/service.md) |
+| `k8s_v135_configmaps` | ConfigMaps | 13409 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/configuration/configmap.md) |
 | `k8s_v135_secrets` | Secrets | 30420 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/configuration/secret.md) |
-| `k8s_v135_probes` | Configure Liveness, Readiness and Startup Probes | 24040 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes.md) |
-| `k8s_v135_persistent_volumes` | Persistent Volumes | 52718 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/storage/persistent-volumes.md) |
-| `k8s_v135_scheduling` | Assigning Pods to Nodes | 31070 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/scheduling-eviction/assign-pod-node.md) |
-| `k8s_v135_kubectl_quick_reference` | kubectl Quick Reference | 25072 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/reference/kubectl/quick-reference.md) |
-| `k8s_v135_stateless_deployment` | Run a Stateless Application Using a Deployment | 4147 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/tasks/run-application/run-stateless-application-deployment.md) |
+| `k8s_v135_probes` | Configure Liveness, Readiness and Startup Probes | 26472 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes.md) |
+| `k8s_v135_persistent_volumes` | Persistent Volumes | 52722 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/storage/persistent-volumes.md) |
+| `k8s_v135_scheduling` | Assigning Pods to Nodes | 33307 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/scheduling-eviction/assign-pod-node.md) |
+| `k8s_v135_kubectl_quick_reference` | kubectl Quick Reference | 25076 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/reference/kubectl/quick-reference.md) |
+| `k8s_v135_stateless_deployment` | Run a Stateless Application Using a Deployment | 6081 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/tasks/run-application/run-stateless-application-deployment.md) |
 
 ## Preserved development corpus: CORPUS_V0
 

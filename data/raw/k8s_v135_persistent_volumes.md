@@ -650,7 +650,7 @@ Current reclaim policies are:
 * Recycle -- basic scrub (`rm -rf /thevolume/*`)
 * Delete -- delete the volume
 
-For Kubernetes , only `nfs` and `hostPath` volume types support recycling.
+For Kubernetes 1.35, only `nfs` and `hostPath` volume types support recycling.
 
 ### Mount Options
 

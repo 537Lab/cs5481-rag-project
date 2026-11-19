@@ -1,7 +1,7 @@
 {
-  "corpus_id": "cs5481-k8s-v135-16docs-115f404491b0",
-  "generated_at": "2026-11-18T20:21:23Z",
-  "manifest_sha256": "cb00877a4c2e8ecf8d1ea8b977843cfad40e9929ecd4f9eb6ed74fe9f762b600",
+  "corpus_id": "cs5481-k8s-v135-16docs-36fd3eedf33f",
+  "generated_at": "2026-11-19T05:15:40Z",
+  "manifest_sha256": "3e3e4e4217dfd85da16eb217b9b769e8a37efdcadec9ca0d85894df679e5e311",
   "source_repository": "kubernetes/website",
   "source_tag": "snapshot-initial-v1.35",
   "source_commit": "8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
@@ -41,9 +41,9 @@
     {
       "doc_id": "k8s_v135_components",
       "path": "k8s_v135_components.md",
-      "sha256": "073c633dfc31b379aff3c7aa663115e4938aefd60d84295b2b14a23587000479",
-      "bytes": 2704,
-      "chars": 2704,
+      "sha256": "ed32fa5d1fa6b5b9f3787d673ab8500e2fb5b9a2f1144e693a8e5513d07b3e89",
+      "bytes": 2754,
+      "chars": 2754,
       "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
       "source_chars": 3316
     },
@@ -59,38 +59,38 @@
     {
       "doc_id": "k8s_v135_pods",
       "path": "k8s_v135_pods.md",
-      "sha256": "ea3be3ea7ec13a04f3d7947e4dbcc66ab163f15591d37515824a11af437abe91",
-      "bytes": 22619,
-      "chars": 22615,
+      "sha256": "fe88ef440f7259ce42dffdc683bc6b81bbd5e80266be41c479b81dc75159baa6",
+      "bytes": 22816,
+      "chars": 22812,
       "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
-      "source_chars": 25199
+      "source_chars": 25309
     },
     {
       "doc_id": "k8s_v135_deployments",
       "path": "k8s_v135_deployments.md",
-      "sha256": "d1ebd5c2507d991e63bd7e84b218ac419789f53282b4ee81c7f6fa728de37ae4",
-      "bytes": 57189,
-      "chars": 57181,
+      "sha256": "b397f72b0a9a1df550b41e9be6e8b3be2bd35e69752fccbe28f9eb18107d5941",
+      "bytes": 57553,
+      "chars": 57545,
       "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
-      "source_chars": 59080
+      "source_chars": 59374
     },
     {
       "doc_id": "k8s_v135_services",
       "path": "k8s_v135_services.md",
-      "sha256": "4886ec2b1eabab7e656a15509270678c5e0fc798c419c648e96d16afddb734f4",
-      "bytes": 42416,
-      "chars": 42412,
+      "sha256": "b5f379201bbe61126b47c5e9b6b9f47e80a5607c27d24db1947331b101ead8e7",
+      "bytes": 42610,
+      "chars": 42606,
       "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
-      "source_chars": 45115
+      "source_chars": 45251
     },
     {
       "doc_id": "k8s_v135_configmaps",
       "path": "k8s_v135_configmaps.md",
-      "sha256": "fb11b2f2363826e7e31c59791c1b9f71b06220e97a638c971965596cf5aba77a",
-      "bytes": 11911,
-      "chars": 11911,
+      "sha256": "d9f4afd96d2d2df65c3229406d4899af4ea11a167d64dcfc9d57b1e1050e454b",
+      "bytes": 13409,
+      "chars": 13409,
       "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
-      "source_chars": 12932
+      "source_chars": 14320
     },
     {
       "doc_id": "k8s_v135_secrets",
@@ -104,47 +104,47 @@
     {
       "doc_id": "k8s_v135_probes",
       "path": "k8s_v135_probes.md",
-      "sha256": "1f8aaa918b5cd9e6a7c620f6386370a84781d0fbc38047871df5298e29ac39cb",
-      "bytes": 24040,
-      "chars": 24040,
+      "sha256": "5243744031d53d69af83bb8ae2a72ed46f20b39900aaf809db69c0ffa1333131",
+      "bytes": 26472,
+      "chars": 26472,
       "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
-      "source_chars": 25025
+      "source_chars": 27175
     },
     {
       "doc_id": "k8s_v135_persistent_volumes",
       "path": "k8s_v135_persistent_volumes.md",
-      "sha256": "0f2372da323e37ac793a0db94d53c2dd76efc6059d240bd8e184a6047f5e2b36",
-      "bytes": 52720,
-      "chars": 52718,
+      "sha256": "2032a965a6e47269efbf4e662e995b885ab05c7967b537711d9794b418d68183",
+      "bytes": 52724,
+      "chars": 52722,
       "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
       "source_chars": 54928
     },
     {
       "doc_id": "k8s_v135_scheduling",
       "path": "k8s_v135_scheduling.md",
-      "sha256": "dbe49c55c8bb40fbc4a8828958c2121a1fe014bfccc55ca80efb521bbffe41cd",
-      "bytes": 31070,
-      "chars": 31070,
+      "sha256": "f6a4c77fcc14afe472eeff09f96a16966e84bcf0466539a2ffc12e7370ed7369",
+      "bytes": 33307,
+      "chars": 33307,
       "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
-      "source_chars": 32605
+      "source_chars": 34646
     },
     {
       "doc_id": "k8s_v135_kubectl_quick_reference",
       "path": "k8s_v135_kubectl_quick_reference.md",
-      "sha256": "2e270c0bd6b7381c2e14c02a38350d85c470f34e4b84128b6922c84b0f1ba328",
-      "bytes": 25072,
-      "chars": 25072,
+      "sha256": "9fc5a81515bc12f0881e8d38da74db8cd843ddb4c7c28f651145ebbace0a6b40",
+      "bytes": 25076,
+      "chars": 25076,
       "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
       "source_chars": 25393
     },
     {
       "doc_id": "k8s_v135_stateless_deployment",
       "path": "k8s_v135_stateless_deployment.md",
-      "sha256": "47a7db69b78a80549986cd819a329d03663a5cb9495ddcbb4d68cc16ee50dedb",
-      "bytes": 4147,
-      "chars": 4147,
+      "sha256": "c018cbcb15c090847868216968bcc6753f0a2cefefcffe7a869ef2f8d7b1ce12",
+      "bytes": 6081,
+      "chars": 6081,
       "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
-      "source_chars": 4624
+      "source_chars": 6241
     }
   ]
 }

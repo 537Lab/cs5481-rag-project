@@ -9,6 +9,7 @@ import pytest
 
 from ragkit.config import ROOT
 from ragkit.loaders import load_documents, load_manifest
+from scripts.fetch_corpus import clean_markdown, expand_external_content
 
 REAL_MANIFEST = ROOT / "data" / "raw" / "manifest.json"
 FROZEN_MANIFEST = ROOT / "data" / "raw" / "frozen_manifest.json"
@@ -61,6 +62,44 @@ def test_load_mock_fixtures_are_labelled():
     assert len(documents) == 2
     assert all(doc.text.startswith("MOCK FIXTURE") for doc in documents)
     assert all(doc.license.startswith("MOCK") for doc in documents)
+
+
+def test_external_content_is_inlined_before_cleaning():
+    # Synthetic source cache: no network and no fabricated production documents.
+    cache = {
+        "content/en/includes/prereq.md": "MOCK prerequisite: configure kubectl.\n",
+        "content/en/examples/example.yaml": "apiVersion: v1\nkind: Pod\n",
+    }
+    raw = ('## Prerequisites\n{{< include "prereq.md" >}}\n'
+           '{{% code_sample file="example.yaml" %}}')
+    result = clean_markdown(expand_external_content(raw, cache))
+    assert "MOCK prerequisite: configure kubectl." in result
+    assert "```yaml\napiVersion: v1\nkind: Pod\n```" in result
+
+
+@pytest.mark.parametrize("directive", [
+    '{{< include "missing.md" >}}',
+    '{{% code_sample file="missing.yaml" %}}',
+])
+def test_cleaner_rejects_unexpanded_external_content(directive):
+    with pytest.raises(ValueError, match="not expanded"):
+        clean_markdown(directive)
+
+
+def test_version_placeholder_and_code_templates_survive_cleaning():
+    result = clean_markdown('Kubernetes v{{< skew currentVersion >}}\n'
+                            "```shell\nkubectl --template='{{.metadata.name}}'\n```\n")
+    assert "Kubernetes v1.35" in result
+    assert "{{.metadata.name}}" in result
+
+
+@pytest.mark.parametrize("name", ["probes", "stateless_deployment"])
+def test_task_prerequisites_and_yaml_are_present(name):
+    text = (REAL_MANIFEST.parent / f"k8s_v135_{name}.md").read_text(encoding="utf-8")
+    section = text.split("## Prerequisites", 1)[1].split("\n## ", 1)[0]
+    assert "You need to have a Kubernetes cluster" in section
+    assert "kubectl" in section
+    assert "```yaml\napiVersion:" in text
 
 
 def test_manifest_missing_file_raises(tmp_path):

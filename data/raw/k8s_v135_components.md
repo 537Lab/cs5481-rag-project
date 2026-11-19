@@ -1,5 +1,7 @@
 This page provides a high-level overview of the essential components that make up a Kubernetes cluster.
 
+[Figure: The components of a Kubernetes cluster]
+
 ## Core Components
 
 A Kubernetes cluster consists of a control plane and one or more worker nodes.

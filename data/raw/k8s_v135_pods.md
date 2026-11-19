@@ -48,6 +48,19 @@ Pods in a Kubernetes cluster are used in two main ways:
 
 The following is an example of a Pod which consists of a container running the image `nginx:1.14.2`.
 
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.14.2
+    ports:
+    - containerPort: 80
+```
+
 To create the Pod shown above, run the following command:
 ```shell
 kubectl apply -f https://k8s.io/examples/pods/simple-pod.yaml
@@ -103,7 +116,7 @@ You should set the `.spec.os.name` field to either `windows` or `linux` to indic
 which you want the pod to run. These two are the only operating systems supported for now by
 Kubernetes. In the future, this list may be expanded.
 
-In Kubernetes v, the value of `.spec.os.name` does not affect
+In Kubernetes v1.35, the value of `.spec.os.name` does not affect
 how the kube-scheduler
 picks a node for the Pod to run on. In any cluster where there is more than one operating system for
 running nodes, you should set the
@@ -398,6 +411,8 @@ acts as a web server for files in a shared volume, and a separate
 [sidecar container](/docs/concepts/workloads/pods/sidecar-containers/)
 that updates those files from a remote source, as in the following diagram:
 
+[Figure: Pod creation diagram]
+
 Some Pods have init containers
 as well as app containers.
 By default, init containers run and complete before the app containers are started.
@@ -433,7 +448,7 @@ in the Pod Lifecycle documentation.
 * Read about [PodDisruptionBudget](/docs/concepts/workloads/pods/disruptions/)
   and how you can use it to manage application availability during disruptions.
 * Pod is a top-level resource in the Kubernetes REST API.
-  The
+  The Pod
   object definition describes the object in detail.
 * [The Distributed System Toolkit: Patterns for Composite Containers](/blog/2015/06/the-distributed-system-toolkit-patterns/) explains common layouts for Pods with more than one container.
 * Read about [Pod topology spread constraints](/docs/concepts/scheduling-eviction/topology-spread-constraints/)

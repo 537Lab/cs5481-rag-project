@@ -51,6 +51,15 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-11-19 | T1 | OpenAI Codex（编码 agent） | 按全组确认的 Kubernetes v1.35 方向核验 CC BY 4.0 许可与 12 个固定来源；改写采集脚本；生成正式语料、`manifest.json`、`frozen_manifest.json`、来源表与统计文档；定位并最小修正 T4 开发 QA 的两处集成冲突 | **尚未由负责人逐项人工复核**；需在 PR review 时抽查固定来源、清洗前后正文、SHA-256 和 T4 兼容修正 | 无；以下均由 Codex 在本机执行：两次 `fetch_corpus.py` 与全量哈希比较、`pytest`、`ruff check .`、真实 `cli ingest`（16 文档 → 651 chunks）、真实 `cli retrieve` | 待本 PR 的 `ci / check` | 分支 `t1-corpus-kubernetes-v135` |
 
+### T1 清洗遗漏修订（2026-11-19，PR #12）
+
+Codex 对照固定来源确认旧清洗器遗漏了 2 处共享 prerequisites、15 处 YAML
+code_sample，以及 8 处 currentVersion 占位符。修订后从同一 commit 内联依赖，
+保留版本值、图片说明及 API 标签；未展开的 include/code_sample 会报错。
+本地 Agent 验证：132 passed / 2 skipped，Ruff 通过，重复采集逐文件字节一致；
+真实入库 16 篇 → 668 chunks。新快照为 `cs5481-k8s-v135-16docs-36fd3eedf33f`，
+替代 PR 初版快照；旧字符偏移及 chunk 编号需重新生成。人工复核与云端 CI 尚待确认。
+
 ## 写报告时建议披露的句子（示例，必须按实际情况改写）
 
 > 本项目的基础工程脚手架、单元测试与部分文档由 AI 编码助手在仓库账号持有人授权下生成，

@@ -1,6 +1,6 @@
 This page contains a list of commonly used `kubectl` commands and flags.
 
-These instructions are for Kubernetes v. To check the version, use the `kubectl version` command.
+These instructions are for Kubernetes v1.35. To check the version, use the `kubectl version` command.
 
 ## Kubectl autocomplete
 

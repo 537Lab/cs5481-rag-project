@@ -148,6 +148,62 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _source_uri(source_path: str) -> str:
+    return (
+        f"https://raw.githubusercontent.com/{K8S_REPOSITORY}/"
+        f"{K8S_COMMIT}/{source_path}"
+    )
+
+
+def fetch_source_text(source_path: str, cache: dict[str, str]) -> str:
+    """Fetch one UTF-8 source file from the pinned commit, with per-run caching."""
+    if source_path in cache:
+        return cache[source_path]
+    request = urllib.request.Request(
+        _source_uri(source_path),
+        headers={"User-Agent": USER_AGENT, "Accept": "text/plain"},
+    )
+    with urllib.request.urlopen(request, timeout=60) as response:
+        raw_bytes = response.read()
+    try:
+        text = raw_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"source is not valid UTF-8: {source_path}") from exc
+    cache[source_path] = text
+    return text
+
+
+def _safe_relative_path(value: str) -> str:
+    path = Path(value)
+    if path.is_absolute() or ".." in path.parts:
+        raise ValueError(f"unsafe referenced source path: {value!r}")
+    return path.as_posix()
+
+
+def expand_external_content(raw_text: str, cache: dict[str, str]) -> str:
+    """Inline Hugo includes and code samples from the same pinned commit."""
+
+    def replace(match: re.Match[str]) -> str:
+        body = match.group(1).strip()
+        include = re.fullmatch(r'include\s+"([^"]+)"', body)
+        if include:
+            name = _safe_relative_path(include.group(1))
+            return "\n" + fetch_source_text(f"content/en/includes/{name}", cache) + "\n"
+
+        if body.startswith("code_sample "):
+            file_match = re.search(r'\bfile="([^"]+)"', body)
+            if not file_match:
+                raise ValueError(f"code_sample has no file attribute: {body}")
+            name = _safe_relative_path(file_match.group(1))
+            language_match = re.search(r'\blanguage="([^"]+)"', body)
+            language = language_match.group(1) if language_match else Path(name).suffix[1:]
+            sample = fetch_source_text(f"content/en/examples/{name}", cache).rstrip()
+            return f"\n```{language}\n{sample}\n```\n"
+        return match.group(0)
+
+    return SHORTCODE_RE.sub(replace, raw_text)
+
+
 def _strip_front_matter(text: str) -> str:
     if not text.startswith("---\n"):
         return text
@@ -157,11 +213,29 @@ def _strip_front_matter(text: str) -> str:
     return text[closing + len("\n---\n") :]
 
 
-def _replace_shortcode(match: re.Match[str]) -> str:
+def _front_matter_values(text: str) -> dict[str, str]:
+    if not text.startswith("---\n"):
+        return {}
+    closing = text.find("\n---\n", 4)
+    if closing < 0:
+        raise ValueError("Markdown starts with unterminated YAML front matter")
+    values = {}
+    for line in text[4:closing].splitlines():
+        if ":" not in line or line.startswith((" ", "\t", "-")):
+            continue
+        key, value = line.split(":", 1)
+        values[key.strip()] = value.strip().strip('"\'')
+    return values
+
+
+def _replace_shortcode(match: re.Match[str], metadata: dict[str, str]) -> str:
     """Keep meaningful labels while dropping Hugo presentation directives."""
     body = match.group(1).strip()
     if body.startswith("/"):
         return ""
+
+    if body.startswith(("include ", "code_sample ")):
+        raise ValueError(f"external shortcode was not expanded: {body}")
 
     text_value = re.search(r'\btext="([^"]+)"', body)
     if text_value:
@@ -177,36 +251,59 @@ def _replace_shortcode(match: re.Match[str]) -> str:
 
     if re.fullmatch(r'param\s+"version"', body):
         return K8S_VERSION
+
+    if re.fullmatch(r"skew\s+currentVersion", body):
+        return K8S_VERSION.removeprefix("v")
+
+    if body.startswith("api-reference "):
+        text_match = re.search(r'\btext="([^"]+)"', body)
+        if text_match:
+            return text_match.group(1)
+        anchor_match = re.search(r'\banchor="([^"]+)"', body)
+        if anchor_match:
+            return anchor_match.group(1)
+        page_match = re.search(r'\bpage="([^"]+)"', body)
+        if page_match:
+            resource = page_match.group(1).rsplit("/", 1)[-1]
+            return resource.rsplit("-v", 1)[0].replace("-", " ").title()
+        return "API reference"
+
+    if body.startswith("figure "):
+        caption = re.search(r'\bcaption="([^"]+)"', body)
+        alt = re.search(r'\balt="([^"]+)"', body)
+        label = caption or alt
+        return f"[Figure: {label.group(1)}]" if label else ""
+
+    if body == "version-check":
+        minimum = metadata.get("min-kubernetes-server-version")
+        if minimum:
+            return (
+                f"Your Kubernetes server must be version {minimum} or later. "
+                "To check the version, use `kubectl version`."
+            )
+        return "To check the Kubernetes server version, use `kubectl version`."
     return ""
 
 
 def clean_markdown(raw_text: str) -> str:
     """Remove site-only metadata without rewriting the document's prose."""
     text = raw_text.replace("\r\n", "\n").replace("\r", "\n").lstrip("\ufeff")
+    metadata = _front_matter_values(text)
     text = _strip_front_matter(text)
     text = HTML_COMMENT_RE.sub("", text)
-    text = SHORTCODE_RE.sub(_replace_shortcode, text)
+    text = SHORTCODE_RE.sub(lambda match: _replace_shortcode(match, metadata), text)
     text = "\n".join(line.rstrip() for line in text.splitlines())
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
     return text + "\n"
 
 
-def fetch_page(page: CorpusPage) -> tuple[str, int]:
-    request = urllib.request.Request(
-        page.download_uri,
-        headers={"User-Agent": USER_AGENT, "Accept": "text/plain"},
-    )
-    with urllib.request.urlopen(request, timeout=60) as response:
-        raw_bytes = response.read()
-    try:
-        raw_text = raw_bytes.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise ValueError(f"source is not valid UTF-8: {page.source_uri}") from exc
-
-    cleaned = clean_markdown(raw_text)
+def fetch_page(page: CorpusPage, cache: dict[str, str]) -> tuple[str, int]:
+    raw_text = fetch_source_text(page.source_path, cache)
+    expanded_text = expand_external_content(raw_text, cache)
+    cleaned = clean_markdown(expanded_text)
     if len(cleaned.strip()) < 800:
         raise ValueError(f"cleaned document is unexpectedly short: {page.doc_id}")
-    return cleaned, len(raw_text)
+    return cleaned, len(expanded_text)
 
 
 def load_corpus_v0() -> list[dict[str, Any]]:
@@ -301,8 +398,9 @@ def render_sources(entries: list[dict[str, Any]], records: list[dict[str, Any]])
         f"- Tag: `{K8S_TAG}`",
         f"- Pinned commit: `{K8S_COMMIT}`",
         f"- Licence: [{K8S_LICENSE}]({K8S_LICENSE_URI})",
-        "- Changes: removed YAML front matter, HTML comments, and Hugo presentation shortcodes; "
-        "kept prose, headings, tables, links, and code blocks.",
+        "- Changes: inlined shared prerequisites and code samples from the same commit; removed "
+        "YAML front matter, HTML comments, and presentation-only shortcode wrappers; kept prose, "
+        "headings, tables, links, and code blocks.",
         "",
         "| doc_id | Title | Clean chars | Pinned source |",
         "| --- | --- | ---: | --- |",
@@ -396,11 +494,12 @@ def render_corpus_doc(
             "",
             "## Cleaning and downstream impact",
             "",
-            "The script removes site-only front matter, comments, figures, include directives, "
-            "and shortcode wrappers. It retains the prose inside note/caution blocks, Markdown "
-            "headings, code blocks, tables, and links. Long reference and task pages will produce "
-            "more chunks than short concept pages; this is intentional variation for the T2 "
-            "chunking comparison and T3 retrieval diagnostics.",
+            "The script deterministically inlines shared prerequisites and YAML code samples from "
+            "the same pinned commit, substitutes version placeholders, and removes site-only front "
+            "matter, comments, and presentation wrappers. It retains the prose inside note/caution "
+            "blocks, Markdown headings, code blocks, tables, and links. Long reference and task "
+            "pages will produce more chunks than short concept pages; this is intentional "
+            "variation for the T2 chunking comparison and T3 retrieval diagnostics.",
             "",
             "## Reproduce and verify",
             "",
@@ -421,8 +520,9 @@ def render_corpus_doc(
 def main() -> int:
     corpus_v0 = load_corpus_v0()
     fetched: dict[str, tuple[str, int]] = {}
+    source_cache: dict[str, str] = {}
     for page in PAGES:
-        cleaned, raw_chars = fetch_page(page)
+        cleaned, raw_chars = fetch_page(page, source_cache)
         fetched[page.doc_id] = (cleaned, raw_chars)
         print(
             f"OK {page.doc_id:36s} source={raw_chars:6d} cleaned={len(cleaned):6d}"

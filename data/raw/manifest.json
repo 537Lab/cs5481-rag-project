@@ -42,7 +42,7 @@
     "source_uri": "https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/overview/components.md",
     "license": "CC BY 4.0",
     "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
-    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 3316 chars; cleaned 2704 chars."
+    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 3316 chars; cleaned 2754 chars."
   },
   {
     "doc_id": "k8s_v135_nodes",
@@ -60,7 +60,7 @@
     "source_uri": "https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/workloads/pods/_index.md",
     "license": "CC BY 4.0",
     "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
-    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 25199 chars; cleaned 22615 chars."
+    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 25309 chars; cleaned 22812 chars."
   },
   {
     "doc_id": "k8s_v135_deployments",
@@ -69,7 +69,7 @@
     "source_uri": "https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/workloads/controllers/deployment.md",
     "license": "CC BY 4.0",
     "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
-    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 59080 chars; cleaned 57181 chars."
+    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 59374 chars; cleaned 57545 chars."
   },
   {
     "doc_id": "k8s_v135_services",
@@ -78,7 +78,7 @@
     "source_uri": "https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/services-networking/service.md",
     "license": "CC BY 4.0",
     "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
-    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 45115 chars; cleaned 42412 chars."
+    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 45251 chars; cleaned 42606 chars."
   },
   {
     "doc_id": "k8s_v135_configmaps",
@@ -87,7 +87,7 @@
     "source_uri": "https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/configuration/configmap.md",
     "license": "CC BY 4.0",
     "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
-    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 12932 chars; cleaned 11911 chars."
+    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 14320 chars; cleaned 13409 chars."
   },
   {
     "doc_id": "k8s_v135_secrets",
@@ -105,7 +105,7 @@
     "source_uri": "https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes.md",
     "license": "CC BY 4.0",
     "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
-    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 25025 chars; cleaned 24040 chars."
+    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 27175 chars; cleaned 26472 chars."
   },
   {
     "doc_id": "k8s_v135_persistent_volumes",
@@ -114,7 +114,7 @@
     "source_uri": "https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/storage/persistent-volumes.md",
     "license": "CC BY 4.0",
     "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
-    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 54928 chars; cleaned 52718 chars."
+    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 54928 chars; cleaned 52722 chars."
   },
   {
     "doc_id": "k8s_v135_scheduling",
@@ -123,7 +123,7 @@
     "source_uri": "https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/scheduling-eviction/assign-pod-node.md",
     "license": "CC BY 4.0",
     "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
-    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 32605 chars; cleaned 31070 chars."
+    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 34646 chars; cleaned 33307 chars."
   },
   {
     "doc_id": "k8s_v135_kubectl_quick_reference",
@@ -132,7 +132,7 @@
     "source_uri": "https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/reference/kubectl/quick-reference.md",
     "license": "CC BY 4.0",
     "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
-    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 25393 chars; cleaned 25072 chars."
+    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 25393 chars; cleaned 25076 chars."
   },
   {
     "doc_id": "k8s_v135_stateless_deployment",
@@ -141,6 +141,6 @@
     "source_uri": "https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/tasks/run-application/run-stateless-application-deployment.md",
     "license": "CC BY 4.0",
     "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
-    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 4624 chars; cleaned 4147 chars."
+    "notes": "Official Kubernetes Markdown; YAML front matter, HTML comments, and Hugo presentation shortcodes removed deterministically. Source 6241 chars; cleaned 6081 chars."
   }
 ]

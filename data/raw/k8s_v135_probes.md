@@ -37,6 +37,17 @@ Understand the difference between readiness and liveness probes and when to appl
 
 ## Prerequisites
 
+You need to have a Kubernetes cluster, and the kubectl command-line tool must
+be configured to communicate with your cluster. It is recommended to run this tutorial on a cluster with at least two nodes that are not acting as control plane hosts. If you do not already have a
+cluster, you can create one by using
+[minikube](https://minikube.sigs.k8s.io/docs/tutorials/multi_node/)
+or you can use one of these Kubernetes playgrounds:
+
+* [iximiuz Labs](https://labs.iximiuz.com/playgrounds?category=kubernetes&filter=all)
+* [Killercoda](https://killercoda.com/playgrounds/scenario/kubernetes)
+* [KodeKloud](https://kodekloud.com/public-playgrounds)
+* [Play with Kubernetes](https://labs.play-with-k8s.com/)
+
 ## Define a liveness command
 
 Many applications running for long periods of time eventually transition to
@@ -45,6 +56,30 @@ liveness probes to detect and remedy such situations.
 
 In this exercise, you create a Pod that runs a container based on the
 `registry.k8s.io/busybox:1.27.2` image. Here is the configuration file for the Pod:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    test: liveness
+  name: liveness-exec
+spec:
+  containers:
+  - name: liveness
+    image: registry.k8s.io/busybox:1.27.2
+    args:
+    - /bin/sh
+    - -c
+    - touch /tmp/healthy; sleep 30; rm -f /tmp/healthy; sleep 600
+    livenessProbe:
+      exec:
+        command:
+        - cat
+        - /tmp/healthy
+      initialDelaySeconds: 5
+      periodSeconds: 5
+```
 
 In the configuration file, you can see that the Pod has a single `Container`.
 The `periodSeconds` field specifies that the kubelet should perform a liveness
@@ -129,6 +164,30 @@ liveness-exec   1/1       Running   1          1m
 Another kind of liveness probe uses an HTTP GET request. Here is the configuration
 file for a Pod that runs a container based on the `registry.k8s.io/e2e-test-images/agnhost` image.
 
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    test: liveness
+  name: liveness-http
+spec:
+  containers:
+  - name: liveness
+    image: registry.k8s.io/e2e-test-images/agnhost:2.40
+    args:
+    - liveness
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: 8080
+        httpHeaders:
+        - name: Custom-Header
+          value: Awesome
+      initialDelaySeconds: 3
+      periodSeconds: 3
+```
+
 In the configuration file, you can see that the Pod has a single container.
 The `periodSeconds` field specifies that the kubelet should perform a liveness
 probe every 3 seconds. The `initialDelaySeconds` field tells the kubelet that it
@@ -188,6 +247,31 @@ kubelet will attempt to open a socket to your container on the specified port.
 If it can establish a connection, the container is considered healthy, if it
 can't it is considered a failure.
 
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: goproxy
+  labels:
+    app: goproxy
+spec:
+  containers:
+  - name: goproxy
+    image: registry.k8s.io/goproxy:0.1
+    ports:
+    - containerPort: 8080
+    readinessProbe:
+      tcpSocket:
+        port: 8080
+      initialDelaySeconds: 15
+      periodSeconds: 10
+    livenessProbe:
+      tcpSocket:
+        port: 8080
+      initialDelaySeconds: 15
+      periodSeconds: 10
+```
+
 As you can see, configuration for a TCP check is quite similar to an HTTP check.
 This example uses both readiness and liveness probes. The kubelet will run the
 first liveness probe 15 seconds after the container starts. This will attempt to
@@ -223,6 +307,24 @@ this example shows how to configure Kubernetes to use it for application livenes
 Similarly you can configure readiness and startup probes.
 
 Here is an example manifest:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: etcd-with-grpc
+spec:
+  containers:
+  - name: etcd
+    image: registry.k8s.io/etcd:3.5.1-0
+    command: [ "/usr/local/bin/etcd", "--data-dir",  "/var/lib/etcd", "--listen-client-urls", "http://0.0.0.0:2379", "--advertise-client-urls", "http://127.0.0.1:2379", "--log-level", "debug"]
+    ports:
+    - containerPort: 2379
+    livenessProbe:
+      grpc:
+        port: 2379
+      initialDelaySeconds: 10
+```
 
 To use a gRPC probe, `port` must be configured. If you want to distinguish probes of different types
 and probes for different features you can use the `service` field.
@@ -423,8 +525,8 @@ to 127.0.0.1. If your pod relies on virtual hosts, which is probably the more co
 case, you should not use `host`, but rather set the `Host` header in `httpHeaders`.
 
 For an HTTP probe, the kubelet sends two request headers in addition to the mandatory `Host` header:
-- `User-Agent`: The default value is `kube-probe/`,
-  where `` is the version of the kubelet.
+- `User-Agent`: The default value is `kube-probe/1.35`,
+  where `1.35` is the version of the kubelet.
 - `Accept`: The default value is `*/*`.
 
 You can override the default headers by defining `httpHeaders` for the probe.
