@@ -146,5 +146,147 @@
       "version": "snapshot-initial-v1.35@8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564",
       "source_chars": 6241
     }
+  ],
+  "upstream_sources": [
+    {
+      "path": "content/en/docs/concepts/architecture/nodes.md",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/architecture/nodes.md",
+      "sha256": "cc7d33ca0b8867b2ca9d6a3138a22a71221d9de191f4734f2da2acee6566daf0"
+    },
+    {
+      "path": "content/en/docs/concepts/configuration/configmap.md",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/configuration/configmap.md",
+      "sha256": "2e3860f6aeb7d86e6d2dd8f32493dbc1d52ce1c54606cb08455107b297a63a2a"
+    },
+    {
+      "path": "content/en/docs/concepts/configuration/secret.md",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/configuration/secret.md",
+      "sha256": "488b0cccd1e91c96aec44cde09c7a236ad89033054da843885072a0a46daa0a7"
+    },
+    {
+      "path": "content/en/docs/concepts/overview/components.md",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/overview/components.md",
+      "sha256": "2a44575bda1065a9bafdb1c3237e44760b06edccad639c5c4f538dad3f06f039"
+    },
+    {
+      "path": "content/en/docs/concepts/scheduling-eviction/assign-pod-node.md",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/scheduling-eviction/assign-pod-node.md",
+      "sha256": "336ed22fe2dc3a33258c02c6900e184c052069d2356f8980bbd8f05453a73d55"
+    },
+    {
+      "path": "content/en/docs/concepts/services-networking/service.md",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/services-networking/service.md",
+      "sha256": "78684261257687cbc6e9fdc45abde7a739c7f702e467d1b64c0a75e9fb446937"
+    },
+    {
+      "path": "content/en/docs/concepts/storage/persistent-volumes.md",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/storage/persistent-volumes.md",
+      "sha256": "e6bf9567174912bc583cc32fff095f1619d1982ff6250ab45a471ca42ce5bf35"
+    },
+    {
+      "path": "content/en/docs/concepts/workloads/controllers/deployment.md",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/workloads/controllers/deployment.md",
+      "sha256": "132f1770adcad0023c739772212438ede14142263b53716d046146386ab4ad73"
+    },
+    {
+      "path": "content/en/docs/concepts/workloads/pods/_index.md",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/concepts/workloads/pods/_index.md",
+      "sha256": "548d3f0a4b3bf89e21a6bf8220046a13237877ba74e18c693a3957addee90f6a"
+    },
+    {
+      "path": "content/en/docs/reference/kubectl/quick-reference.md",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/reference/kubectl/quick-reference.md",
+      "sha256": "f09decf15c90a6a68072428ec000a0f5b7db8b1f79e881236c5c7b28b05470a3"
+    },
+    {
+      "path": "content/en/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes.md",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes.md",
+      "sha256": "79b575626c7f73c740d6628ba73ccb68a0ea63927c2635f8a94058cbc85c1753"
+    },
+    {
+      "path": "content/en/docs/tasks/run-application/run-stateless-application-deployment.md",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/tasks/run-application/run-stateless-application-deployment.md",
+      "sha256": "1c388ed283b4ad33139cfc437d4f6bdfbebce98e327b7f53359e3084663d6397"
+    },
+    {
+      "path": "content/en/examples/application/deployment-scale.yaml",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/application/deployment-scale.yaml",
+      "sha256": "dfb4665a266578275be1ad64f275c59796ba6ca15193cb10fe45910abdb63ebc"
+    },
+    {
+      "path": "content/en/examples/application/deployment-update.yaml",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/application/deployment-update.yaml",
+      "sha256": "5faee7e6b00dddb6fdbb3ce83455b2b0cd23de7c78b77e45b59b743b00f0b6dc"
+    },
+    {
+      "path": "content/en/examples/application/deployment.yaml",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/application/deployment.yaml",
+      "sha256": "c57f73449b26eae02ca2a549c388807d49ef6d3f2dc040a9bbb1290128d97157"
+    },
+    {
+      "path": "content/en/examples/configmap/configure-pod.yaml",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/configmap/configure-pod.yaml",
+      "sha256": "53067eeeaf5d63c39bf7941286083ba6a4de385e40dca45a0afa91421d15fa88"
+    },
+    {
+      "path": "content/en/examples/configmap/env-configmap.yaml",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/configmap/env-configmap.yaml",
+      "sha256": "208c2d256d75e0e22a1443377ea5fe0f5937b2a1fc48dcdc91abdb4ef797130b"
+    },
+    {
+      "path": "content/en/examples/controllers/nginx-deployment.yaml",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/controllers/nginx-deployment.yaml",
+      "sha256": "0c51429243635a7d62846099b45259b9dcd06553a46032d76ad605c6cc1f6c5d"
+    },
+    {
+      "path": "content/en/examples/pods/pod-with-affinity-preferred-weight.yaml",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/pods/pod-with-affinity-preferred-weight.yaml",
+      "sha256": "07a14cddf0c90feff49d69dc3253569d9003e2f5aff571c330b13b09b151c405"
+    },
+    {
+      "path": "content/en/examples/pods/pod-with-node-affinity.yaml",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/pods/pod-with-node-affinity.yaml",
+      "sha256": "2aad6f57e7d6940904ede0002ce8e2367e5fe2a464e9643bcb310b2ac35d0d57"
+    },
+    {
+      "path": "content/en/examples/pods/pod-with-pod-affinity.yaml",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/pods/pod-with-pod-affinity.yaml",
+      "sha256": "c2bf573d43a3a5aeb0b3cc59b00819959cb2061edf4f1cb66cad5d337591b0cc"
+    },
+    {
+      "path": "content/en/examples/pods/probe/exec-liveness.yaml",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/pods/probe/exec-liveness.yaml",
+      "sha256": "b953accf65b51da25b3760367908aef58d5393189c6369e4644084c906579259"
+    },
+    {
+      "path": "content/en/examples/pods/probe/grpc-liveness.yaml",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/pods/probe/grpc-liveness.yaml",
+      "sha256": "54864cb8d77043e32376107927ccbc403e3038ba68df02aa2a30c6f3fe605009"
+    },
+    {
+      "path": "content/en/examples/pods/probe/http-liveness.yaml",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/pods/probe/http-liveness.yaml",
+      "sha256": "1ce438d196fff0241e7716a40a292616d2d02784748a629de4d1048a7358372a"
+    },
+    {
+      "path": "content/en/examples/pods/probe/tcp-liveness-readiness.yaml",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/pods/probe/tcp-liveness-readiness.yaml",
+      "sha256": "a920ef042558a52a976d892957dd7da2f2adea8f8ffdb945efbdecfab5b7f6ad"
+    },
+    {
+      "path": "content/en/examples/pods/simple-pod.yaml",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/pods/simple-pod.yaml",
+      "sha256": "a1ef36e75c3d580dcfeeb977f92103853aca60415560540165390e7174909630"
+    },
+    {
+      "path": "content/en/examples/service/simple-service.yaml",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/service/simple-service.yaml",
+      "sha256": "b9aa7ed1fcfb4c092ce9a65856b041fe9a7c886c353a1a8399be9a58ad22364f"
+    },
+    {
+      "path": "content/en/includes/task-tutorial-prereqs.md",
+      "source_uri": "https://raw.githubusercontent.com/kubernetes/website/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/includes/task-tutorial-prereqs.md",
+      "sha256": "563c0ce1ac8c62083357ee1ad94b948025a0dae0221038039b4a1aeb723e6fcd"
+    }
   ]
 }

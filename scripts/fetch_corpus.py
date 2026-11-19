@@ -19,6 +19,7 @@ import hashlib
 import json
 import re
 import statistics
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -163,8 +164,17 @@ def fetch_source_text(source_path: str, cache: dict[str, str]) -> str:
         _source_uri(source_path),
         headers={"User-Agent": USER_AGENT, "Accept": "text/plain"},
     )
-    with urllib.request.urlopen(request, timeout=60) as response:
-        raw_bytes = response.read()
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                raw_bytes = response.read()
+            break
+        except urllib.error.HTTPError as exc:
+            if exc.code < 500 or attempt == 2:
+                raise
+        except (urllib.error.URLError, TimeoutError):
+            if attempt == 2:
+                raise
     try:
         text = raw_bytes.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -385,7 +395,11 @@ def stable_generated_at(corpus_id: str) -> str:
     return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def render_sources(entries: list[dict[str, Any]], records: list[dict[str, Any]]) -> str:
+def render_sources(
+    entries: list[dict[str, Any]],
+    records: list[dict[str, Any]],
+    upstream_sources: list[dict[str, Any]],
+) -> str:
     record_by_id = {record["doc_id"]: record for record in records}
     lines = [
         "# Corpus provenance",
@@ -398,6 +412,7 @@ def render_sources(entries: list[dict[str, Any]], records: list[dict[str, Any]])
         f"- Tag: `{K8S_TAG}`",
         f"- Pinned commit: `{K8S_COMMIT}`",
         f"- Licence: [{K8S_LICENSE}]({K8S_LICENSE_URI})",
+        "- Attribution: The Kubernetes Authors and contributors to kubernetes/website.",
         "- Changes: inlined shared prerequisites and code samples from the same commit; removed "
         "YAML front matter, HTML comments, and presentation-only shortcode wrappers; kept prose, "
         "headings, tables, links, and code blocks.",
@@ -412,6 +427,22 @@ def render_sources(entries: list[dict[str, Any]], records: list[dict[str, Any]])
             f"[source]({entry['source_uri']}) |"
         )
 
+    lines.extend([
+        "",
+        "## Referenced source files",
+        "",
+        "Includes and YAML examples are loaded from the same pinned commit as the pages. "
+        "Full upstream SHA-256 values are recorded in `frozen_manifest.json`.",
+        "",
+        "| Source path | SHA-256 prefix |",
+        "| --- | --- |",
+    ])
+    for record in upstream_sources:
+        if "/includes/" in record["path"] or "/examples/" in record["path"]:
+            url = (f"https://github.com/{K8S_REPOSITORY}/blob/"
+                   f"{K8S_COMMIT}/{record['path']}")
+            lines.append(f"| [{record['path']}]({url}) | `{record['sha256'][:16]}` |")
+
     lines.extend(
         [
             "",
@@ -419,6 +450,9 @@ def render_sources(entries: list[dict[str, Any]], records: list[dict[str, Any]])
             "",
             "These four CC BY-SA 4.0 Wikipedia excerpts remain byte-for-byte unchanged so "
             "existing development tests and QA drafts continue to work.",
+            "Attribution: Wikipedia contributors. Retrieved 2026-11-13; shortened to plain-text "
+            "excerpts with wiki markup and reference lists removed. "
+            "Licence: https://creativecommons.org/licenses/by-sa/4.0/.",
             "",
             "| doc_id | Title | Licence | Source |",
             "| --- | --- | --- | --- |",
@@ -512,6 +546,20 @@ def render_corpus_doc(
             "A second fetch against the same pinned commit must leave `git diff` empty. "
             "All formal experiments must cite the `corpus_id` above.",
             "",
+            "## Handoff to T2–T5",
+            "",
+            "- The default manifest indexes all 16 documents. The 12 `k8s_v135_*` entries are "
+            "the Kubernetes domain corpus; the four Wikipedia entries preserve development QA.",
+            "- T2/T3: rebuild indexes from this snapshot before experiments. After the include "
+            "repair, old chunk IDs, character offsets, and the earlier 651-chunk count are stale.",
+            "- T4: the existing 35-question CSV remains a Wikipedia development set. Create and "
+            "human-review the formal Kubernetes QA against the cleaned text in this snapshot; "
+            "passing development tests does not establish domain QA coverage.",
+            "- T5: use freshly retrieved chunk IDs for citations and batch answers. Regenerate "
+            "any answer artifacts based on the earlier snapshot.",
+            "- The snapshot remains a PR candidate until another member reviews and merges it. "
+            "Record the merged commit and corpus_id with every formal run.",
+            "",
         ]
     )
     return "\n".join(lines)
@@ -555,11 +603,21 @@ def main() -> int:
         "source_tag": K8S_TAG,
         "source_commit": K8S_COMMIT,
         "documents": records,
+        "upstream_sources": [
+            {
+                "path": source_path,
+                "source_uri": _source_uri(source_path),
+                "sha256": _sha256(source_text.encode("utf-8")),
+            }
+            for source_path, source_text in sorted(source_cache.items())
+        ],
     }
     FROZEN_PATH.write_text(
         json.dumps(frozen, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
-    SOURCES_PATH.write_text(render_sources(entries, records), encoding="utf-8")
+    SOURCES_PATH.write_text(
+        render_sources(entries, records, frozen["upstream_sources"]), encoding="utf-8"
+    )
     CORPUS_DOC_PATH.write_text(
         render_corpus_doc(corpus_id, generated_at, records), encoding="utf-8"
     )

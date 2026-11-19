@@ -45,3 +45,11 @@ python -m ragkit.cli ingest
 ```
 
 A second fetch against the same pinned commit must leave `git diff` empty. All formal experiments must cite the `corpus_id` above.
+
+## Handoff to T2–T5
+
+- The default manifest indexes all 16 documents. The 12 `k8s_v135_*` entries are the Kubernetes domain corpus; the four Wikipedia entries preserve development QA.
+- T2/T3: rebuild indexes from this snapshot before experiments. After the include repair, old chunk IDs, character offsets, and the earlier 651-chunk count are stale.
+- T4: the existing 35-question CSV remains a Wikipedia development set. Create and human-review the formal Kubernetes QA against the cleaned text in this snapshot; passing development tests does not establish domain QA coverage.
+- T5: use freshly retrieved chunk IDs for citations and batch answers. Regenerate any answer artifacts based on the earlier snapshot.
+- The snapshot remains a PR candidate until another member reviews and merges it. Record the merged commit and corpus_id with every formal run.

@@ -57,6 +57,19 @@ def test_frozen_manifest_hashes_match_committed_documents():
         assert digest == record["sha256"], record["doc_id"]
 
 
+def test_snapshot_records_upstream_includes_and_examples():
+    frozen = json.loads(FROZEN_MANIFEST.read_text(encoding="utf-8"))
+    sources = frozen["upstream_sources"]
+    paths = [source["path"] for source in sources]
+    assert len(paths) == len(set(paths))
+    assert "content/en/includes/task-tutorial-prereqs.md" in paths
+    assert sum(path.startswith("content/en/examples/") for path in paths) == 15
+    for source in sources:
+        assert K8S_COMMIT in source["source_uri"]
+        assert len(source["sha256"]) == 64
+        int(source["sha256"], 16)
+
+
 def test_load_mock_fixtures_are_labelled():
     documents = load_documents(MOCK_MANIFEST)
     assert len(documents) == 2

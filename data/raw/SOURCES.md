@@ -8,6 +8,7 @@
 - Tag: `snapshot-initial-v1.35`
 - Pinned commit: `8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564`
 - Licence: [CC BY 4.0](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/LICENSE)
+- Attribution: The Kubernetes Authors and contributors to kubernetes/website.
 - Changes: inlined shared prerequisites and code samples from the same commit; removed YAML front matter, HTML comments, and presentation-only shortcode wrappers; kept prose, headings, tables, links, and code blocks.
 
 | doc_id | Title | Clean chars | Pinned source |
@@ -25,9 +26,33 @@
 | `k8s_v135_kubectl_quick_reference` | kubectl Quick Reference | 25076 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/reference/kubectl/quick-reference.md) |
 | `k8s_v135_stateless_deployment` | Run a Stateless Application Using a Deployment | 6081 | [source](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/docs/tasks/run-application/run-stateless-application-deployment.md) |
 
+## Referenced source files
+
+Includes and YAML examples are loaded from the same pinned commit as the pages. Full upstream SHA-256 values are recorded in `frozen_manifest.json`.
+
+| Source path | SHA-256 prefix |
+| --- | --- |
+| [content/en/examples/application/deployment-scale.yaml](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/application/deployment-scale.yaml) | `dfb4665a26657827` |
+| [content/en/examples/application/deployment-update.yaml](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/application/deployment-update.yaml) | `5faee7e6b00dddb6` |
+| [content/en/examples/application/deployment.yaml](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/application/deployment.yaml) | `c57f73449b26eae0` |
+| [content/en/examples/configmap/configure-pod.yaml](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/configmap/configure-pod.yaml) | `53067eeeaf5d63c3` |
+| [content/en/examples/configmap/env-configmap.yaml](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/configmap/env-configmap.yaml) | `208c2d256d75e0e2` |
+| [content/en/examples/controllers/nginx-deployment.yaml](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/controllers/nginx-deployment.yaml) | `0c51429243635a7d` |
+| [content/en/examples/pods/pod-with-affinity-preferred-weight.yaml](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/pods/pod-with-affinity-preferred-weight.yaml) | `07a14cddf0c90fef` |
+| [content/en/examples/pods/pod-with-node-affinity.yaml](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/pods/pod-with-node-affinity.yaml) | `2aad6f57e7d69409` |
+| [content/en/examples/pods/pod-with-pod-affinity.yaml](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/pods/pod-with-pod-affinity.yaml) | `c2bf573d43a3a5ae` |
+| [content/en/examples/pods/probe/exec-liveness.yaml](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/pods/probe/exec-liveness.yaml) | `b953accf65b51da2` |
+| [content/en/examples/pods/probe/grpc-liveness.yaml](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/pods/probe/grpc-liveness.yaml) | `54864cb8d77043e3` |
+| [content/en/examples/pods/probe/http-liveness.yaml](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/pods/probe/http-liveness.yaml) | `1ce438d196fff024` |
+| [content/en/examples/pods/probe/tcp-liveness-readiness.yaml](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/pods/probe/tcp-liveness-readiness.yaml) | `a920ef042558a52a` |
+| [content/en/examples/pods/simple-pod.yaml](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/pods/simple-pod.yaml) | `a1ef36e75c3d580d` |
+| [content/en/examples/service/simple-service.yaml](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/examples/service/simple-service.yaml) | `b9aa7ed1fcfb4c09` |
+| [content/en/includes/task-tutorial-prereqs.md](https://github.com/kubernetes/website/blob/8b8f5d5669f06aa7c1b4f0b7d371adc89c4c7564/content/en/includes/task-tutorial-prereqs.md) | `563c0ce1ac8c6208` |
+
 ## Preserved development corpus: CORPUS_V0
 
 These four CC BY-SA 4.0 Wikipedia excerpts remain byte-for-byte unchanged so existing development tests and QA drafts continue to work.
+Attribution: Wikipedia contributors. Retrieved 2026-11-13; shortened to plain-text excerpts with wiki markup and reference lists removed. Licence: https://creativecommons.org/licenses/by-sa/4.0/.
 
 | doc_id | Title | Licence | Source |
 | --- | --- | --- | --- |
