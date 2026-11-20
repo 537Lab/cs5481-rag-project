@@ -936,5 +936,41 @@ K25 的 gold 是教程首句（`stateless_deployment` 第 1 行），top-3 全�
 - 36 道题的人工逐题阅读：本轮只做了机检（逐字、唯一性、跨行覆盖、领域内部、token 不存在）与写作
   自查（§9.4）。机检只能证明引文存在，不能证明题目清楚。
 
+### 9.9 本 PR 的云端 CI：未执行（账号级 Actions 计费），不是代码失败
+
+PR 建好后 `ci / check (pull_request)` 在 2 秒内红。run 页 Annotation 原文：
+
+```
+The job was not started because recent account payments have failed or your spending limit
+needs to be increased. Please check the 'Billing & plans' section in your settings
+```
+
+即 job 从未被调度，与 diff 内容无关。同一个错误出现在 **T1 的 PR #14 的 run**（页面标题
+`T1: freeze Kubernetes v1.35 formal corpus`）上，所以这是账号/组织级、影响全组所有 PR，
+不是本分支特有。`RUNLOG.md` 第 3 节记录的 `43423374183`（2026-11-13）当时是 `success`，
+说明问题发生在 11 月中旬之后。
+
+红之前先把内容层的可能排掉。用干净检出复现 CI 的两条命令：
+
+```
+$ git worktree add --detach .tmp/wt-ci HEAD     # 独立检出：按 .gitattributes 全 LF，无本地未跟踪文件
+$ cd .tmp/wt-ci
+$ ruff check .
+All checks passed!
+$ python -m pytest -q
+exit=0
+```
+
+该 worktree 里 `test_committed_qa_files_stay_lf_so_multi_line_gold_survives_checkout` 通过，
+反证检出确实是 LF（同一个用例在我归一化之前的主工作副本上因 CRLF 红过，见 §9.2）。
+其余三条排除依据：`git ls-files --others --exclude-standard` 为空（没有测试依赖「只在本机存在」的文件）；
+`git diff origin/main HEAD -- .github/workflows/ requirements-dev.txt pyproject.toml` 为空（CI 定义与依赖未变）；
+main 是本分支祖先（`4f865c1`）且 `git merge-tree --write-tree origin/main HEAD` 无冲突（CI 检出的树 = HEAD）。
+
+处置：额度/付款恢复前**不要点 Re-run jobs**（会再次 not started）。`docs/DEV_LOG.md` 与
+`docs/AI_USAGE.md` 里「待本 PR 的 `ci / check`」那一格已改成如实描述，本地证据以上面这段代替。
+「CI 绿才能合并」这条规则现在对全组都不可执行，需要组员另行确认临时判据 —— 我没有替大家改
+`CONTRIBUTING.md`。
+
 
 
