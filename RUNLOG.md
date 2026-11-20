@@ -677,24 +677,99 @@ These numbers describe MOCK fixtures only. Do not put them in the report.
 
 ---
 
-## 9. 正式 Kubernetes 评测集的创建，与 PR #14 两处调整的复核（2026-11-20，T4 第二轮）
+## 9. T2 分块对比（2026-11-17，Cursor 编码 agent 执行，组员尚未重跑）
+
+分支 `t2-chunking-experiment`。解释器是仓库 `.venv` 里的 Python 3.12.10。下面命令都在仓库根目录执行。
+开发对比的逐题 JSON 在 gitignore 的 `eval/results/raw/chunking_comparison/comparison.json`，不入库。
+`eval/results/summary/chunking_comparison/` 这次运行之后仍然不存在。
+
+ONNX 模型首次下载约 79.3 MB 到本机缓存，进度条省略。下载完成后的比较报告原文如下。
+
+```
+$ python -m ruff check .
+All checks passed!
+
+$ python -m pytest -q
+134 passed, 2 skipped
+
+$ python -m eval.chunking_experiment --help
+exit=0
+（打印 usage；无模型、无 API key）
+
+$ python -m eval.chunking_experiment --formal
+exit=2
+ERROR: --formal refused, this run is not on frozen inputs yet:
+  - data/raw/frozen_manifest.json is missing: the I1 corpus snapshot is not frozen yet
+  - unanswerable item(s) without a REVIEWED_BY attestation: N01, N02, N03, N04, N05, N06, N07, N08
+Development numbers belong in eval/results/raw/ via --out, not in summary/.
+
+$ python -m eval.chunking_experiment
+exit=0
+==============================================================================
+[DEVELOPMENT] chunking comparison — 开发用，非正式实验结果
+开发用 / development. Not a formal experiment result. Numbers describe CORPUS_V0 and the current qa_set.csv, which are not frozen formal inputs.
+==============================================================================
+corpus       : data/raw/manifest.json@b5bfc0d70e4a (frozen=False)
+qa set       : eval/qa_set.csv@80b1d950f652
+qa status    : development set on CORPUS_V0, not the frozen formal QA set
+held constant: size=600 overlap=80 top_k=3 min_coverage=0.5 embedding=local:all-MiniLM-L6-v2
+
+strategy      chunks    min    max     mean  hit@1          hit@3
+fixed             28    147    600 554.8571  16/27 (0.5926) 23/27 (0.8519)
+paragraph         33     89    683 480.3939  17/27 (0.6296) 23/27 (0.8519)
+
+disagreements: 5
+  A06 hit@3 gold=[1312, 1413] fixed=hit(rank=2), paragraph=miss(rank=None)
+  A08 hit@1 gold=[2260, 2388] fixed=miss(rank=3), paragraph=hit(rank=1)
+  A16 hit@1 gold=[1760, 1845] fixed=hit(rank=1), paragraph=miss(rank=2)
+  A17 hit@1 gold=[2905, 3040] fixed=miss(rank=None), paragraph=hit(rank=1)
+  A17 hit@3 gold=[2905, 3040] fixed=miss(rank=None), paragraph=hit(rank=1)
+
+not applicable: retrieval-only comparison. hit@k is retrieval_hit_rate(); it is not answer correctness
+wrote eval/results/raw/chunking_comparison/comparison.json
+```
+
+时间戳来自当时 JSON 的 `generated_at`：`2026-11-17T12:43:21+00:00`。
+这次没有调用 LLM。`fixed` 的 16/27 与 23/27 与第 8 节里 T4 对同一开发集的检索数字一致。
+这些数字是开发用结果，不能写进报告当正式实验。组员随后重跑，见第 9.1 节；那次覆盖了这份 JSON。
+
+### 9.1 组员重跑（2026-11-17 20:50 GMT+8）
+
+组员在已激活 `.venv` 的仓库根目录重跑了上面的验收命令。终端文件只保留了最后一条命令和退出码：
+
+```
+$ python -m eval.chunking_experiment
+exit=0
+```
+
+这次写出的 `eval/results/raw/chunking_comparison/comparison.json` 的 `generated_at` 是
+`2026-11-17T12:50:10+00:00`。汇总与 20:43 的 agent 运行相同：`fixed` 28 chunks，
+hit@1 16/27 (0.5926)，hit@3 23/27 (0.8519)；`paragraph` 33 chunks，hit@1 17/27 (0.6296)，
+hit@3 23/27 (0.8519)。`pytest`、`ruff` 和 `--help` 的屏幕输出没有留在终端记录里，这里不补写它们的通过行数。
+
+---
+
+## 10. 正式 Kubernetes 评测集的创建，与 PR #14 两处调整的复核（2026-11-20，T4 第二轮）
+
+> 编号说明：本节原为第 9 节，与 main 上 T2 的第 9 节（分块对比）撞号；合并 `origin/main`
+> （`848d7c6`）后编号改为第 10 节，内部各小节号与交叉引用一并从 9.x 改为 10.x。
 
 PR #14（分支 `t1-corpus-kubernetes-v135`，head `50e9985`）留了两条给 T4 的话：
 「#14 对 `eval/qa_set.csv` 和 `tests/test_eval_metrics.py` 有少量调整，请 T4 负责人确认」，
 以及「目前 35 道 QA 仍是 Wikipedia 开发集，正式 Kubernetes QA 还需要 T4 创建并人工审核」。
 本轮完成前者的 review、以及后者的**创建**；**人工审核一步没有做，也做不了** ——
-`REVIEWED_BY` 是一个组员的名字，不能由 agent 代填（见 §9.7）。
+`REVIEWED_BY` 是一个组员的名字，不能由 agent 代填（见 §10.7）。
 
 分支 `t4-k8s-qa-set`，基点是**尚未合并**的 `pr/14`：正式题只能引用 I1 冻结快照里的那 12 篇
 Kubernetes 文档，而这些文档此刻只在 #14 里。环境与前两轮相同（Windows + `.venv`，
 Python 3.13.5，本地 ONNX embedding + 本地 Chroma，**零付费调用**）；下文命令一律写成仓库内
 可移植形式，实际由 `.venv\Scripts\*.exe` 在同一台机器上执行。
 
-### 9.1 PR #14 两处调整的复核结论
+### 10.1 PR #14 两处调整的复核结论
 
 | #14 的调整 | 本轮查到的真实原因 | 结论 |
 | --- | --- | --- |
-| `N07` 的 `ABSENT_TOKENS` 由 `charge; fee` 改成 `charge for reusing; licensing fee` | 旧检验是裸子串匹配：`fee` 命中的是语料里的 **`feedback`**，并不能证明「收费」这件事在语料中出现过 | **接受**。但根因在检验器不在题目，§9.2 已改成词边界匹配；以后组员不必再为了躲开偶然去改写措辞 |
+| `N07` 的 `ABSENT_TOKENS` 由 `charge; fee` 改成 `charge for reusing; licensing fee` | 旧检验是裸子串匹配：`fee` 命中的是语料里的 **`feedback`**，并不能证明「收费」这件事在语料中出现过 | **接受**。但根因在检验器不在题目，§10.2 已改成词边界匹配；以后组员不必再为了躲开偶然去改写措辞 |
 | 测试新增 `CORPUS_V0_DOC_IDS` 常量，并把「覆盖所有文档」改成「覆盖开发语料」 | 语料从 4 篇扩到 16 篇后，35 道 Wikipedia 开发题本来就不该覆盖 12 篇新文档 | **接受**。本轮进一步把「覆盖」变成两份文件各自的硬要求，并新增一条「两份合起来必须覆盖整个快照」的检查 |
 
 #14 在本机 worktree（`pr/14` 全量检出，验证完即删除）的真实结果：
@@ -715,7 +790,7 @@ FAILED tests/test_loaders.py::test_frozen_manifest_hashes_match_committed_docume
 1 failed, 132 passed, 2 skipped in 10.60s
 ```
 
-### 9.2 失败项定位：冻结语料的字节在 Windows 上被换行符改写（阻塞 #14，与 T4 代码无关）
+### 10.2 失败项定位：冻结语料的字节在 Windows 上被换行符改写（阻塞 #14，与 T4 代码无关）
 
 `tests/test_loaders.py` 用 `read_bytes()` 比较磁盘字节与 `frozen_manifest.json` 记录的 SHA-256，
 而 `scripts/fetch_corpus.py` 也是按字节记的哈希。逐篇比对（临时脚本，输出留在 gitignored 的
@@ -759,7 +834,7 @@ exit=2
 所以除了 `.gitattributes`，本轮还钉了两个测试：`test_committed_qa_files_stay_lf_so_multi_line_gold_survives_checkout`（检查两份已提交 CSV 的字节）与
 `test_a_crlf_copy_of_the_formal_set_stops_matching_the_corpus`（反向控制，证明上一条检查对应的失败真实存在）。
 
-### 9.3 `eval/metrics.py` 的三处改造
+### 10.3 `eval/metrics.py` 的三处改造
 
 1. **删掉 `QA_SET_STATUS` 常量**，改为 `qa_set_status(path, items)` **按内容推导**：文件名
    决定它是正式集还是开发集；`qa_corpus_binding()` 再决定这些 gold 是否只引用 I1 快照列出的
@@ -773,7 +848,7 @@ exit=2
    之外的文档」两类拒绝，拒绝信息里给出待签名清单的路径；`cmd_validate` 多打三行：语料绑定、
    快照中尚无 answerable 题的文档、复核表位置。
 
-### 9.4 两份 QA 文件
+### 10.4 两份 QA 文件
 
 35 题保留为开发集，**内容未改一行**，只换了文件名（`git mv` 保留历史）；I2 唯一的
 `eval/qa_set.csv` 路径现在放的是正式 Kubernetes 集，所以默认参数下 T2/T3/T5 拿到的就是正式集。
@@ -815,7 +890,7 @@ formal evaluation set; 8 refusal label(s) awaiting a human REVIEWED_BY
 一开始想用的 `design document`、`implemented in`、`mysql`、`cannot exceed`、`borg` 几个 token
 全部被机检拦下（它们在快照里真的出现），已换词；最终 23 个 token 全部确认不存在。
 
-### 9.5 验收命令（真实执行）
+### 10.5 验收命令（真实执行）
 
 ```
 $ ruff check .
@@ -860,7 +935,7 @@ exit=0
 `pyproject.toml` 的 `addopts` 已含 `-q`，重复传无副作用，保留是为了跟 RUNLOG 历史记录可对比。
 2 个 skipped 仍是 `tests/test_e2e_real.py`（需 `RUN_REAL_E2E=1`，其中一个还需 `OPENAI_API_KEY`），本轮未开启。
 
-### 9.6 REAL 检索命中率（正式集与开发集，同一个索引）
+### 10.6 REAL 检索命中率（正式集与开发集，同一个索引）
 
 真实入库 16 篇 → 668 chunks（`fixed` size=600 overlap=80，本地 ONNX MiniLM dim=384，`top_k=3`，
 `min_coverage=0.5`），未动 `config.toml`，零付费调用：
@@ -899,7 +974,7 @@ hit@3 从 0.8519 降到 0.6923**。这不是「代码坏了」的巧合，而是
 另：这两个文件只落在 gitignored 的 `eval/results/raw/`，没进 `summary/`：拒答标注未复核，
 `--formal` 会被拒，这是当前应有的状态。
 
-### 9.7 hit@3 未命中的 8 题归因（切片问题还是排序问题）
+### 10.7 hit@3 未命中的 8 题归因（切片问题还是排序问题）
 
 因为命中率明显偏低，本轮逐条检查了未命中题的 gold 区间是否**可能被任何 chunk 命中**：用与入库相同的
 `fixed 600/80` 本地重切，取该文档内覆盖该区间比例最高的 chunk：
@@ -922,7 +997,7 @@ T2 的 chunking 对比可以拿「不存在因切片而不可命中的题」作�
 K25 的 gold 是教程首句（`stateless_deployment` 第 1 行），top-3 全是 `pods`/`probes` 的首块 —— 问题里
 的“tutorial”在索引中没有任何可区分的信号，这是领域文档本身的特点，不是引文写错了。
 
-### 9.8 本轮明确未执行 / 未做
+### 10.8 本轮明确未执行 / 未做
 
 - **人工审核（#14 里要的第二件事）没做，也不是本轮能做的**：`eval/qa_set.csv` 的 10 条拒答标注全部
   没有 `REVIEWED_BY`。已备好待签名的工作单 `eval/review/formal_qa_review.md`（逐题列出要重读的页面、
@@ -931,12 +1006,12 @@ K25 的 gold 是教程首句（`stateless_deployment` 第 1 行），top-3 全�
   拒答标注未复核这一条就足以拦住它；代码路径由测试用临时目录覆盖。
 - `score` 对 REAL 答案产物的打分：仍未执行（需要 T5 的真 `eval/answers/<run_id>.jsonl`）；
   `answer_correctness` 依旧无数字（`pending human grading`）。
-- `paragraph` 策略的命中率：本轮未测（本机 collection 只有 `chunks_fixed`）；第 9.6 节两个率都是
+- `paragraph` 策略的命中率：本轮未测（本机 collection 只有 `chunks_fixed`）；第 10.6 节两个率都是
   `fixed 600/80`，不能代表全项目。
 - 36 道题的人工逐题阅读：本轮只做了机检（逐字、唯一性、跨行覆盖、领域内部、token 不存在）与写作
-  自查（§9.4）。机检只能证明引文存在，不能证明题目清楚。
+  自查（§10.4）。机检只能证明引文存在，不能证明题目清楚。
 
-### 9.9 本 PR 的云端 CI：未执行（账号级 Actions 计费），不是代码失败
+### 10.9 本 PR 的云端 CI：未执行（账号级 Actions 计费），不是代码失败
 
 PR 建好后 `ci / check (pull_request)` 在 2 秒内红。run 页 Annotation 原文：
 
@@ -962,7 +1037,7 @@ exit=0
 ```
 
 该 worktree 里 `test_committed_qa_files_stay_lf_so_multi_line_gold_survives_checkout` 通过，
-反证检出确实是 LF（同一个用例在我归一化之前的主工作副本上因 CRLF 红过，见 §9.2）。
+反证检出确实是 LF（同一个用例在我归一化之前的主工作副本上因 CRLF 红过，见 §10.2）。
 其余三条排除依据：`git ls-files --others --exclude-standard` 为空（没有测试依赖「只在本机存在」的文件）；
 `git diff origin/main HEAD -- .github/workflows/ requirements-dev.txt pyproject.toml` 为空（CI 定义与依赖未变）；
 main 是本分支祖先（`4f865c1`）且 `git merge-tree --write-tree origin/main HEAD` 无冲突（CI 检出的树 = HEAD）。
@@ -972,5 +1047,58 @@ main 是本分支祖先（`4f865c1`）且 `git merge-tree --write-tree origin/ma
 「CI 绿才能合并」这条规则现在对全组都不可执行，需要组员另行确认临时判据 —— 我没有替大家改
 `CONTRIBUTING.md`。
 
+**后续（2026-11-21）**：本节记录的那个状态已过去 —— 本 PR 页面现在显示 **1 successful check**，
+账号级计费故障已恢复。上一段保留作为当时的事实记录，不回头修改；当前 CI 口径见 §10.10。
 
+### 10.10 合并 `origin/main`（`848d7c6`）：两个「第 9 节」撞号，以及合并后的实跑（2026-11-21）
+
+main 在这期间合并了 T1 的 #13（`0ea607d`，loader 加固）与 T2 的 #10（`848d7c6`，分块对比）。
+`git merge origin/main` 后：**代码层全部自动合并**（`ragkit/loaders.py`、`ragkit/chunking.py`、
+`eval/chunking_experiment.py`、`tests/test_chunking.py`、`tests/test_loaders.py`），冲突只在三个
+追加式文档：
+
+| 文件 | 冲突原因 | 处理 |
+| --- | --- | --- |
+| `RUNLOG.md` | 本分支的 T4 第二轮写了「第 9 节」，与 main 上 T2 的第 9 节**编号碰撞** | 保留 T2 的第 9 节原文不动；T4 一节整体改编号为**第 10 节**，内部小节号与交叉引用一并从 9.x 改为 10.x |
+| `docs/DEV_LOG.md` | 两边都在记录表尾部追加行 | 保留 T2 三行；T4 的 11-15 行用本分支的更新版（main 上那行还写着「待跑 CI / 待 review」，而它实际已以 `4f865c1` 合入）；新增本轮合并说明行 |
+| `docs/AI_USAGE.md` | 两边都重写了尾部「不要照抄示例句」那段 | 合为一段，并按当前事实更新（T2 的行已在 main；T4 已四轮） |
+
+指向修正：`docs/DEV_LOG.md` 与 `docs/AI_USAGE.md` 里属于 T4 的引用改为第 10 节；**T2 自己的引用
+（`docs/CHUNKING_EXPERIMENT.md`、两行 T2 记录里的「第 9 节 / 9.1 节」）一律不改**，它们指的仍是
+T2 自己在 main 上的第 9 节。没有改动 T1/T2 的实现代码，也没有为迁就他们而改指标行为。
+
+合并后实跑（仓库根目录、`.venv`）：
+
+```
+$ ruff check .
+All checks passed!
+
+$ python -m pytest -o addopts="" -q
+168 passed, 2 skipped in 5.43s        # 合并前 148 passed / 2 skipped
+
+$ python -m eval.metrics validate
+exit=0                                # 正式集：36 条，绑定 12 篇，frozen snapshot: True
+$ python -m eval.metrics validate --qa eval/qa_set_dev_v0.csv
+exit=0                                # 开发集：35 条，4 篇 CORPUS_V0
+$ python -m eval.metrics validate --require-reviewed
+exit=2                                # 10 条 REVIEWED_BY 未签，与 §10.8 一致
+```
+
+用例数增加来自 main：`tests/test_chunking.py` 10 → 23 个 `def test_`、`tests/test_loaders.py`
+15 → 21（parametrize 展开后采集总数 150 → 170）；`tests/test_eval_metrics.py` 未变（82 例）。
+没人为调整过计数或跳过条件。
+
+跨任务接口的一手证据 —— T2 的正式门在本分支上少了一条拒绝理由：
+
+```
+$ python -m eval.chunking_experiment --formal
+ERROR: --formal refused, this run is not on frozen inputs yet:
+  - unanswerable item(s) without a REVIEWED_BY attestation: KN01, KN02, KN03, KN04, KN05, KN06, KN07, KN08, KN09, KN10
+exit=2
+```
+
+第 9 节里那条 `data/raw/frozen_manifest.json is missing` 已消失，`eval/qa_set.csv` 路径检查也通过：
+说明 I1 快照与 I2 正式集两个前提在 #14 + 本分支合入后就绪，剩下的唯一阻塞是人工签名。
+给 T2 的一句话：`--formal` 不需要改代码，等 `REVIEWED_BY` 签完就能跑；T2 的 `DEVELOPMENT_NOTE`
+里「the current qa_set.csv … not frozen formal inputs」这句已与本仓库现状不符（只报告，本轮没改 T2 的文件）。
 

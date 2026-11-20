@@ -40,12 +40,13 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-11-14 | T4 | Qoder（编码 agent）辅助写 | 起草 `eval/qa_set.csv` 题目候选、`eval/metrics.py`、`eval/judge_protocol.md`，并辅改 `eval/README.md`；未让 AI 写 gold 以外的实验数字 | 逐条比对 `qa_set.csv` 的 gold quote 确实来自 `data/raw/` 原文；确认 `metrics.py` 没硬编码任何命中率/正确率，无 `--grades` 时只输出 pending | 由 agent 在本机执行，本人未逐条重跑（review 时建议重跑）：`eval.metrics --help/validate/retrieval`、`ruff check .`、`pytest` | 待本 PR 的 `ci / check` | 分支 `t4-eval-qa-metrics` |
 | 2026-11-15 | T4（同步修订，按 PR #8 的 I3/I4/I5） | Qoder（编码 agent）辅助改 | 按组员 5 条意见改 `eval/metrics.py`（I3 函数名、I4 JSONL、分母、`REVIEWED_BY` 门、I5 快照与 summary）与 `tests/test_eval_metrics.py`（+28 例，验收双文件 45 → 73 passed），同步 `eval/README.md`、`eval/judge_protocol.md`、`RUNLOG.md` 第 7/8 节；未重写首轮代码 | 逐条核对组员意见与 `docs/PROJECT_PLAN.md` §6.1 表格；阅读并改回 agent 写的两处描述不准的注释；**发现自己造成的一个真实问题**：合并 `origin/main` 时用 `git checkout --theirs` 处理 4 个冲突文档，把首轮写在 `RUNLOG.md`/`DEV_LOG.md`/`AI_USAGE.md` 里的 T4 记录一起覆盖了（已恢复，见 `RUNLOG.md` 第 8.7 节） | 同上：全部验证命令由 agent 执行（原始输出逐条存入 `RUNLOG.md` 第 8 节），本人阅读输出但**未亲手重跑**；因此本行不能记为「组员亲自执行」 | 待本 PR 的 `ci / check` 变绿后由另一位组员 review | 分支 `t4-eval-qa-metrics` |
-| 2026-11-20 | T4（正式 Kubernetes QA 集，分支基于尚未合并的 PR #14） | Qoder（编码 agent）辅助写 | 35 题 `git mv` 为 `eval/qa_set_dev_v0.csv`；生成正式集 `eval/qa_set.csv`（36 条：26 answerable + 10 unanswerable，逐字引自 #14 冻结快照的 12 篇文档）与签名工作单 `eval/review/formal_qa_review.md`；改 `eval/metrics.py`（`token_occurs()` 词边界、`qa_set_status()` 由文件与行内容推导、`assert_formal_inputs()` 两类新拒绝）、`tests/test_eval_metrics.py`（67 → 82 例）、`eval/README.md`、`eval/judge_protocol.md`、`RUNLOG.md` 第 9 节；新增 `.gitattributes` | **题目正文、gold 行号与 `notes` 理由均由 agent 起草**（生成脚本留在本地 `.tmp/`、未入库，因此 csv 是唯一正式工件）；本人抽查了按行号切出的引文，拦下并改掉 agent 写的四处问题（见 `RUNLOG.md` 第 9.4 节）；确认 agent **没为任何一条 `unanswerable` 填 `REVIEWED_BY`**，也没把 hit@k 写进代码常量 | 全部由 agent 在本机执行、本人阅读但未亲手重跑：`ruff check .`、`pytest`（148 passed / 2 skipped）、`validate`（正式与开发两份均 `exit=0`）、`validate --require-reviewed`（`exit=2`）、`cli ingest`（16 docs → 668 chunks）、`retrieval`（两份 hit@k）；原始输出见 `RUNLOG.md` 第 9 节 | 未执行：run 页报 "The job was not started because recent account payments have failed or your spending limit needs to be increased"（账号级 Actions 计费，job 未被调度）；已用 `git worktree` 干净检出复现 ruff + pytest 全绿（`RUNLOG.md` 第 9.9 节） | 分支 `t4-k8s-qa-set` |
+| 2026-11-20 | T4（正式 Kubernetes QA 集，分支基于尚未合并的 PR #14） | Qoder（编码 agent）辅助写 | 35 题 `git mv` 为 `eval/qa_set_dev_v0.csv`；生成正式集 `eval/qa_set.csv`（36 条：26 answerable + 10 unanswerable，逐字引自 #14 冻结快照的 12 篇文档）与签名工作单 `eval/review/formal_qa_review.md`；改 `eval/metrics.py`（`token_occurs()` 词边界、`qa_set_status()` 由文件与行内容推导、`assert_formal_inputs()` 两类新拒绝）、`tests/test_eval_metrics.py`（67 → 82 例）、`eval/README.md`、`eval/judge_protocol.md`、`RUNLOG.md` 第 10 节；新增 `.gitattributes` | **题目正文、gold 行号与 `notes` 理由均由 agent 起草**（生成脚本留在本地 `.tmp/`、未入库，因此 csv 是唯一正式工件）；本人抽查了按行号切出的引文，拦下并改掉 agent 写的四处问题（见 `RUNLOG.md` 第 10.4 节）；确认 agent **没为任何一条 `unanswerable` 填 `REVIEWED_BY`**，也没把 hit@k 写进代码常量 | 全部由 agent 在本机执行、本人阅读但未亲手重跑：`ruff check .`、`pytest`（148 passed / 2 skipped）、`validate`（正式与开发两份均 `exit=0`）、`validate --require-reviewed`（`exit=2`）、`cli ingest`（16 docs → 668 chunks）、`retrieval`（两份 hit@k）；原始输出见 `RUNLOG.md` 第 10 节 | 未执行：run 页报 "The job was not started because recent account payments have failed or your spending limit needs to be increased"（账号级 Actions 计费，job 未被调度）；已用 `git worktree` 干净检出复现 ruff + pytest 全绿（`RUNLOG.md` 第 10.9 节） | 分支 `t4-k8s-qa-set` |
+| 2026-11-21 | T4（合并 `origin/main` 后的冲突处理） | Qoder（编码 agent）执行，组员本人阅读 | 只动 `RUNLOG.md`、`docs/DEV_LOG.md`、`docs/AI_USAGE.md` 三个文档：main 上 T2 的第 9 节与本分支 T4 的第 9 节撞号，**T4 一节整体改编号为第 10 节**并同步全部交叉引用，T2 的原文一字未改；代码层交给 git 自动合并，未手工改写 T1/T2 的实现 | 逐条确认解冲突没有丢掉任何一边的记录（合并前后行数与标题都对照过）；确认没有替组员补写任何「亲自执行/复核」表述 | 全部由 agent 在本机执行、本人未亲手重跑：`ruff check .` 通过、`pytest` **168 passed / 2 skipped**、`validate`（正式与开发两份 `exit=0`）、`validate --require-reviewed` `exit=2`、`chunking_experiment --formal` `exit=2`（只剩未签名拒答一条理由） | PR 页显示 1 successful check（组员浏览器截图，仓库内无可核验 run id）；11-20 那轮的账号级 Actions 计费故障已恢复 | 分支 `t4-k8s-qa-set` |
 
 > 注意：AI 辅写的 QA 题目仍须由**非作者的组员逐题校对原文**后才能当作正式 gold（gold 质量
 > 直接影响命中率与正确率的可信度）；`judge_protocol.md` 规定 LLM 不得用于编撰或审查 gold quote。
 > 本轮 CSV 里已放正式集，但 **10 条拒答标注无人签名**，因此 `--require-reviewed` / `--formal` 仍关闭。
-> 三轮均**零付费 API 调用**，`answer_correctness` 尚无数字（人评未开始）。
+> 四轮均**零付费 API 调用**，`answer_correctness` 尚无数字（人评未开始）。
 
 ## 组员追加记录（T1，正式语料快照）
 
@@ -70,6 +71,19 @@ Codex 为 28 个固定上游文件记录 URL 与 SHA-256（12 个页面、1 个�
 fixed 668 chunks、paragraph 775 chunks，全部偏移逐字匹配、出处及许可一致，
 覆盖全部非空白正文。该检查不属于正式检索质量对比实验。人工复核仍待完成。
 
+## 组员追加记录（T2，任务包 #2）
+
+| 日期 | 任务包 | AI / Agent 名称 | 具体用途（生成什么、改哪些文件） | 我亲自复核了什么 | 我亲自跑了哪些命令 | 云端 CI 结果 | PR 号 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-11-17 | T2 | Cursor Grok 4.7（编码 agent） | 新增 `eval/chunking_experiment.py` 与 `docs/CHUNKING_EXPERIMENT.md`；`ragkit/chunking.py` 只改模块说明；测试加在 `tests/test_chunking.py`。命中率调用 `eval.metrics.retrieval_hit_rate`，未改 `metrics.py`。开发数字只写进 gitignore 的 `eval/results/raw/`，未写入 `summary/` | 代码是 agent 写的。组员随后重跑了验收命令，见下一行；逐行阅读代码没有单独留下记录 | agent 先跑过一轮，输出在 `RUNLOG.md` 第 9 节。组员重跑见下一行，不要把两轮记成同一次 | 待本分支 PR 的 `ci / check` | 分支 `t2-chunking-experiment`，尚未开 PR |
+| 2026-11-17 20:50 GMT+8 | T2 | 同上；本行是组员自己重跑，不是又一次生成代码 | 未改代码。在仓库根目录、已激活 `.venv` 的终端重跑任务卡上的验收命令 | 重跑了命令。终端里留存的最后一条是 `python -m eval.chunking_experiment`，exit 0。`comparison.json` 的 `generated_at` 为 `2026-11-17T12:50:10+00:00`，hit@1 / hit@3 与 20:43 的 agent 运行相同 | 组员本人重跑：`python -m pytest tests/test_chunking.py -q`、`python -m pytest -q`、`ruff check .`、`python -m eval.chunking_experiment --help`、`python -m eval.chunking_experiment`。屏幕上只留住了最后一条实验命令（exit 0）；pytest、ruff、`--help` 的通过行数没有留在终端记录里，这里不补写 | 仍待 PR 的 `ci / check` | 尚未开 PR |
+| 2026-11-20 | T2（按 PR #10 审阅意见） | Cursor Grok 4.7（编码 agent） | 只改 `eval/chunking_experiment.py`、`tests/test_chunking.py` 和 `docs/CHUNKING_EXPERIMENT.md` 的一句说明。开发模式的 `--out` 不能落在 `eval/results/summary/`（含相对路径和符号链接）；`--formal` 把实际 `--qa` 交给门槛，并拒绝 `qa_set_dev_v0.csv` 以及任何非 `eval/qa_set.csv` 的路径。未改 `metrics.py`，未重跑对比实验，未改已有数字 | 待组员阅读这次门槛改动 | 待组员重跑 `pytest tests/test_chunking.py -q` 和 `ruff check .`。agent 在改完后本地跑这两条，结果写在 `docs/DEV_LOG.md` 本轮对应行 | 待推送后看本 PR 的 `ci / check` | #10 |
+## 组员追加记录（T1，任务包 #1）
+
+| 日期 | 任务包 | AI / Agent 名称 | 具体用途（生成什么、改哪些文件） | 我亲自复核了什么 | 我亲自跑了哪些命令 | 云端 CI 结果 | PR 号 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-11-17 | T1 | OpenAI Codex（编码 agent） | 辅助认领 Issue #1；修改 `ragkit/loaders.py`，增加 UTF-8、必填出处/许可、重复路径与重复内容校验；扩充 `tests/test_loaders.py` 边界测试；未采集或改动正式语料 | **尚未由负责人逐项人工复核**；需在 PR review 时阅读实现并确认能解释失败策略与 MOCK 例外 | 无；以下命令均由 Codex 在本机执行：`pytest tests/test_loaders.py -q`、`pytest -q`、`ruff check .`、`ragkit.cli offline-demo` | 待本 PR 的 `ci / check` | 分支 `t1-corpus-loader-hardening` |
+
 ## 写报告时建议披露的句子（示例，必须按实际情况改写）
 
 > 本项目的基础工程脚手架、单元测试与部分文档由 AI 编码助手在仓库账号持有人授权下生成，
@@ -77,7 +91,10 @@ fixed 668 chunks、paragraph 775 chunks，全部偏移逐字匹配、出处及�
 > 各模块后续实现由对应负责人审阅、修改并亲自运行验证。实验数据均来自本组实际执行的命令，
 > 未使用 AI 生成的模拟结果。各成员贡献比例与签名见本报告最后一页。
 
-不要把示例句直接照抄：上述各表里的验证命令**全部是 AI Agent 而非组员本人跑出来的**（T1 在本文件里
-的登记行同样如此；T2/T3 的登记行在 #10 / #11 里，尚未合并）。数据现状：冻结语料上的**命中率已有真实数字**（正式集 hit@1 8/26、
-hit@3 18/26，同一索引上开发集 16/27 与 23/27），但**人工评分的正确率仍为 0**（无答案产物、无人评分），
-而且正式集的 36 道题都还没经第二人逐题阅读。贡献比例页须在全员开工后据实填写。
+不要把示例句直接照抄。上述各表里的验证命令**绝大多数是 AI Agent 而非组员本人跑出来的**：T4 四轮
+全部由 agent 执行；T1 的登记行同样如此；T2 只有 2026-11-17 20:50 那一行是组员本人于当晚重跑验收命令，
+且其中只有 `python -m eval.chunking_experiment` 的退出码和 JSON 时间戳留在本机记录里。
+数据现状：冻结语料上的**命中率已有真实数字**（正式集 hit@1 8/26、hit@3 18/26，同一索引上开发集 16/27 与 23/27），
+但 T2 已合并的分块对比 hit@k 仍是 CORPUS_V0 开发集上的检索，不是冻结语料上的正式实验；
+**人工评分的正确率仍为 0**（无答案产物、无人评分），而且正式集的 36 道题都还没经第二人逐题阅读。
+贡献比例页须在全员开工后据实填写。

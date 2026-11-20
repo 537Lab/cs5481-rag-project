@@ -12,8 +12,10 @@
 | **人工复核（本人确认）** | 执行者本人或指定复核人阅读、判断、修改或亲自运行 | 只有存在可核验记录（PR review、本人确认）时才记；否则写「待确认」 |
 | **GitHub Actions** | 云端 runner 上的 CI 验证 | 单独记为云端验证，不与本地命令混同，也不等于人工复核 |
 
-**截至本记录，仓库账号持有人本人在做 T4，T1–T3 已由其他组员提交 PR（#9/#12/#13/#14、#10、#11，
-均未合并），T5 尚无人认领**，因此「全组已确认」一类表述仍不能写。以下 bootstrap 内容全部属于
+**截至本记录，仓库账号持有人本人在做 T4。main 上已合并的组员 PR：T1 的 #13（loader 加固）、
+T2 的 #10（分块对比）、T4 的 #7（评测指标）**；仍未合并：T1 的 #14（冻结 Kubernetes 语料）、
+T3 的 #11（检索诊断）；T5 远端已有分支 `t5-generation-validation`（`99c0694`），是否已开 PR
+在本仓库内不可核验。因此「全组已确认」一类表述仍不能写。以下 bootstrap 内容全部属于
 规范化与文档定稿阶段，由 AI Agent 在仓库账号持有人授权下执行。是否逐项人工复核，
 仓库内没有可核验记录，**需由本人确认后补充**；不能据本文件推断为「某人已亲自执行/审阅」。
 
@@ -33,11 +35,16 @@ PR 历史与 commit message 是贡献比例的**证据来源**，本文件只是
 | 2026-11-14 17:20– | 项目定义与协作计划定稿 | AI Agent（WorkBuddy），由账号持有人发起 | 核对课程 PDF 原文（Instructions 1–5、Topic 5 Requirements 1–5）；新增 `docs/PROJECT_PLAN.md`（背景/目标/要求映射/架构/任务/排期/交付）；重写 README 与 `docs/TASKS.md`；清理面向组员资料中的预设身份标签；同步五个 Issue；**只改文档，未改 `ragkit/` 代码** | Agent 本地执行：`ruff check .`、`pytest -q`、文档相对链接检查、预设身份标签与过时文件名残留扫描、Issue 与文档一致性核对；输出见 `RUNLOG.md` 第 6 节。**云端验证**：本 PR 的 `ci / check` | 待本人确认 |
 | 2026-11-14 | T4 首轮（任务包 #4，分支 `t4-eval-qa-metrics` 的 PR） | 组员（仓库账号持有人，PR 作者）+ AI 编码 agent 辅助写，组员本人阅读并修改 | 新增 `eval/qa_set.csv`（35 条：27 answerable + 8 unanswerable）、`eval/metrics.py`（validate/retrieval/score/mock-demo）、`eval/judge_protocol.md`、`tests/test_eval_metrics.py`（39 例）；改写 `eval/README.md`；`RUNLOG.md` 记录首轮命令与输出 | Agent 本地执行：`eval.metrics validate` → 27 条 gold quote 逐字定位、10 个 absent token 确认不存在；`retrieval --hits 1,3 --min-coverage 0.5` → **hit@1 16/27=0.5926、hit@3 23/27=0.8519**（两轮一致）；`ruff check .` 通过；`pytest` 96 passed / 2 skipped。**零付费调用**；人工 judge 尚未开始，因此无 `answer_correctness` 数字。原始输出见 `RUNLOG.md` 第 7 节 | 待其他组员在本 PR review 中确认（合并时该记录一度被覆盖，见 `RUNLOG.md` 第 8.7 节） |
 | 2026-11-15 | T4 同步修订（按 PR #8 接口 I3/I4/I5） | 组员（仓库账号持有人，PR 作者）+ AI 编码 agent 辅助，组员本人阅读并修改 | 处理组员 5 条意见：`git merge origin/main`（4 处文档冲突以 main 为准）；按 I3 暴露四个公开指标函数；按 I4 读 `eval/answers/<run_id>.jsonl` 与 `retrieved_chunk_ids`；正确率分母改为已评分的 answerable 题并新增 `grading_coverage`；`ABSENT_TOKENS` 降为必要条件 + `REVIEWED_BY`/`--require-reviewed`/`--formal` 复核门；按 I5 字段名写 config 快照与 summary 三件套；35 题定为 `CORPUS_V0` 开发集。测试 39 → 67 例（验收双文件 45 → 73），首轮用例全部保留 | Agent 本地执行：`ruff check .` 通过；`pytest` **124 passed / 2 skipped**（验收双文件 73 passed）；`validate`、`retrieval`（hit@1 16/27、hit@3 23/27，与首轮一致）、`score --run-id`、四道护栏的 `exit=2` 逐一实跑。原始输出见 `RUNLOG.md` 第 8 节。**云端验证**：本 PR 的 `ci / check`（未拿到可核验的 run 结论） | 已由仓库账号持有人合并进 main（`4f865c1` = PR #7 merge commit，git 可验）；无其他组员 review 记录 |
-| 2026-11-20 | T4 第二轮（正式 Kubernetes QA 集，分支 `t4-k8s-qa-set`，**基于尚未合并的 PR #14**） | 组员（仓库账号持有人，PR 作者）+ AI 编码 agent 辅助，组员本人阅读并修改 | 复核 #14 对 `eval/qa_set.csv` / `tests/test_eval_metrics.py` 的调整（含只在 Windows 复现的换行哈希缺陷根因）；35 题 `git mv` 为 `eval/qa_set_dev_v0.csv`（保留历史），新建正式集 `eval/qa_set.csv`：36 条 = 26 answerable + 10 unanswerable，逐字引用 #14 冻结快照的 12 篇 Kubernetes 文档并全覆盖；`metrics.py` 三处改造（`token_occurs()` 词边界、`qa_set_status()` 由文件与行内容推导、`assert_formal_inputs()` 增两类拒绝）；新增签名工作单 `eval/review/formal_qa_review.md`；`.gitattributes`（`* text=auto eol=lf`）；测试 67 → 82 例 | Agent 本地执行：`ruff check .` 通过；`pytest` **148 passed / 2 skipped**；`validate`（正式集与开发集均 `exit=0`）、`validate --require-reviewed` `exit=2`、`cli ingest` 16 docs → 668 chunks、`retrieval` 正式集 **hit@1 8/26=0.3077 / hit@3 18/26=0.6923**，同一索引上开发集 16/27=0.5926 / 23/27=0.8519。原始输出见 `RUNLOG.md` 第 9 节。**零付费调用**。**云端验证**：未执行 —— run 页 Annotation 为 "The job was not started because recent account payments have failed or your spending limit needs to be increased"（账号级 Actions 计费，job 从未被调度，非代码失败）；已用干净检出（`git worktree`，全 LF）复现 `ruff check .` 通过 + `pytest -q` `exit=0`，见 `RUNLOG.md` 第 9.9 节 | **10 条拒答标注无人签名**（`REVIEWED_BY` 全空），故 `--require-reviewed` / `--formal` 仍关闭；题目亦未经第二人逐题阅读，待组员在 `eval/review/formal_qa_review.md` 签署 |
+| 2026-11-17 20:43 GMT+8 | T2 分块对比（分支 `t2-chunking-experiment`，尚未开 PR） | Cursor Grok 4.7 编码 agent | 新增 `eval/chunking_experiment.py`：`fixed` / `paragraph` 分 collection 入库，命中率只调用 `retrieval_hit_rate()`。`chunking.py` 只改说明。写 `docs/CHUNKING_EXPERIMENT.md`。未改契约、`config.toml`、`metrics.py`、语料与 QA | Agent 本地执行：`ruff check .` 通过；`pytest` **134 passed / 2 skipped**；`--help` exit 0；`--formal` exit 2 且未创建 `summary/chunking_comparison/`；开发对比 exit 0。`fixed` hit@1 16/27、hit@3 23/27，`paragraph` hit@1 17/27、hit@3 23/27。零付费调用。原始输出见 `RUNLOG.md` 第 9 节。**云端验证**：尚未开 PR | 组员重跑见下一行；逐行阅读代码未另行记录 |
+| 2026-11-17 20:50 GMT+8 | T2 组员重跑验收命令 | 组员本人，仓库根目录，已激活 `.venv` | 未改代码。重跑任务卡列出的 pytest、ruff、`--help` 和开发对比 | 终端只保留最后一条：`python -m eval.chunking_experiment`，exit 0。JSON `generated_at` 为 `2026-11-17T12:50:10+00:00`，汇总与 20:43 的 agent 运行相同。pytest、ruff、`--help` 的屏幕输出没有留在终端文件里，不在此补写通过行数。见 `RUNLOG.md` 第 9.1 节。**云端验证**：尚未开 PR | 组员重跑了这些命令 |
+| 2026-11-20 | T2 按 PR #10 审阅意见补门槛 | Cursor Grok 4.7 编码 agent | 开发运行不能把 `--out` 指到 `eval/results/summary/`；`--formal` 使用实际 QA 路径，并拒绝已提交集合以外的文件。未改 `eval/metrics.py`，未重跑命中率 | Agent 本地：`ruff check .` 通过；`pytest` **137 passed / 2 skipped**（`tests/test_chunking.py` 27 passed，含相对路径、符号链接、`qa_set_dev_v0.csv` 三个反例）。未重跑对比实验，已有 hit 数字不变。组员本人尚未重跑这轮。**云端验证**：待推送到 PR #10 | 待组员阅读门槛改动 |
+| 2026-11-20 | T4 第二轮（正式 Kubernetes QA 集，分支 `t4-k8s-qa-set`，**基于尚未合并的 PR #14**） | 组员（仓库账号持有人，PR 作者）+ AI 编码 agent 辅助，组员本人阅读并修改 | 复核 #14 对 `eval/qa_set.csv` / `tests/test_eval_metrics.py` 的调整（含只在 Windows 复现的换行哈希缺陷根因）；35 题 `git mv` 为 `eval/qa_set_dev_v0.csv`（保留历史），新建正式集 `eval/qa_set.csv`：36 条 = 26 answerable + 10 unanswerable，逐字引用 #14 冻结快照的 12 篇 Kubernetes 文档并全覆盖；`metrics.py` 三处改造（`token_occurs()` 词边界、`qa_set_status()` 由文件与行内容推导、`assert_formal_inputs()` 增两类拒绝）；新增签名工作单 `eval/review/formal_qa_review.md`；`.gitattributes`（`* text=auto eol=lf`）；测试 67 → 82 例 | Agent 本地执行：`ruff check .` 通过；`pytest` **148 passed / 2 skipped**；`validate`（正式集与开发集均 `exit=0`）、`validate --require-reviewed` `exit=2`、`cli ingest` 16 docs → 668 chunks、`retrieval` 正式集 **hit@1 8/26=0.3077 / hit@3 18/26=0.6923**，同一索引上开发集 16/27=0.5926 / 23/27=0.8519。原始输出见 `RUNLOG.md` 第 10 节。**零付费调用**。**云端验证**：未执行 —— run 页 Annotation 为 "The job was not started because recent account payments have failed or your spending limit needs to be increased"（账号级 Actions 计费，job 从未被调度，非代码失败）；已用干净检出（`git worktree`，全 LF）复现 `ruff check .` 通过 + `pytest -q` `exit=0`，见 `RUNLOG.md` 第 10.9 节 | **10 条拒答标注无人签名**（`REVIEWED_BY` 全空），故 `--require-reviewed` / `--formal` 仍关闭；题目亦未经第二人逐题阅读，待组员在 `eval/review/formal_qa_review.md` 签署 |
+| 2026-11-21 | T4 合并 `origin/main`（`848d7c6`）后的冲突处理（分支 `t4-k8s-qa-set`） | AI 编码 agent 执行，组员本人阅读 | 解 `RUNLOG.md`、本文件与 `docs/AI_USAGE.md` 三处冲突：main 上 T2 的第 9 节与本分支 T4 的第 9 节撞号，**T4 一节整体改编号为第 10 节**（含内部小节号与交叉引用），T2 的第 9 节与三行记录原文保留未改；代码层由 git 自动合并（`ragkit/loaders.py`、`ragkit/chunking.py`、`eval/chunking_experiment.py`、两个测试文件），未手工改写他人实现 | Agent 本地执行：`ruff check .` 通过；`pytest` **168 passed / 2 skipped**；`validate`（正式集与开发集均 `exit=0`）、`validate --require-reviewed` `exit=2`；`python -m eval.chunking_experiment --formal` `exit=2`，拒绝理由只剩「10 条 `REVIEWED_BY` 未签」，`frozen_manifest.json` 与 `eval/qa_set.csv` 两项检查已通过（见 `RUNLOG.md` 第 10.10 节） | 待组员重跑；云端 CI 已恢复（PR 页 1 successful check），run 结论目前只有浏览器截图，仓库内无可核验 run id |
 
 > 说明：上表前六行由账号持有人**发起**，命令与代码均由 AI Agent 执行；
-> T4 三行是账号持有人以组员身份提交的任务 PR，代码与文档经本人阅读修改，但验证命令同样由
-> AI 编码 agent 在本机执行（组员可在 review 自己重跑后改写本列）。
+> T4 四行是账号持有人以组员身份提交的任务 PR，代码与文档经本人阅读修改，但验证命令同样由
+> AI 编码 agent 在本机执行（组员可在 review 自己重跑后改写本列）；T2 三行随 PR #10 合并进 main，
+> 其中 2026-11-17 20:50 那一行是组员本人重跑，其余两行由 Cursor 编码 agent 执行。
 > 「本人审阅」「全组确认」等表述在没有 PR review 或本人确认记录时一律不写。
 
 ---
@@ -49,7 +56,9 @@ PR 历史与 commit message 是贡献比例的**证据来源**，本文件只是
   报告里的贡献声明页需本人逐人核实。
 - GitHub Free + 私有仓库不支持强制分支保护 / Rulesets（API 403），PR review 规则靠人工执行。
 - 技术取舍、应用领域与协作规则仍需五人共同确认；五个任务中 T1–T4 已各有 PR
-  （#14 / #10 / #11 / #7），**只有 T4 的 #7 已合并**，T5 尚无人认领，不能写成「全组已确认」。
+  （#14 / #10 / #11 / #7），**已合并的是 T4 的 #7、T1 的 #13 与 T2 的 #10**，T1 的 #14（正式语料）
+  与 T3 的 #11 仍未合并；T5 有分支 `t5-generation-validation` 但仓库内看不到对应 PR，
+  不能写成「全组已确认」。
 - QA 集现状：`eval/qa_set.csv` 已是**正式 Kubernetes 集**（36 条 = 26 answerable + 10 unanswerable，
   逐字引自 `data/raw/frozen_manifest.json` 快照的 12 篇文档并全覆盖）；35 题 Wikipedia 集保留为
   `eval/qa_set_dev_v0.csv`（开发集）。仍未完成的：**10 条 `unanswerable` 标注至今无人写
@@ -61,12 +70,15 @@ PR 历史与 commit message 是贡献比例的**证据来源**，本文件只是
 - 换行符：`core.autocrlf=true` 的 Windows 工作副本上 #14 的 `data/raw/` 是 CRLF，而哈希按字节算，
   会导致 T1 的哈希测试只在 Windows 红（Linux CI 掩盖）。本轮加了 `.gitattributes`（`* text=auto eol=lf`），
   但它不重写已存在的工作副本（实测 `git checkout --force` 无效），已有副本的人重新 clone 最简单；
-  详情见 `RUNLOG.md` 第 9.2 节。
-- **云端 CI 目前对所有 PR 都不可执行**：run 页 Annotation 为“The job was not started because recent
-  account payments have failed or your spending limit needs to be increased”，已确认同时出现在
-  T1 的 #14 与本 PR 上（不是某个分支的问题）。Actions 分钟数/付款属于账号级，只有账号持有人能在
-  <https://github.com/settings/billing> 处理；恢复前合并判据只能靠本地干净检出（`RUNLOG.md` 第 9.9 节）。
-  `CONTRIBUTING.md` 里「CI 绿才能合并」需要全组确认临时口径，本轮**没有**改那个文件。
+  详情见 `RUNLOG.md` 第 10.2 节。
+- **云端 CI 一度对所有 PR 都不可执行，现已恢复**：2026-11-20 的 run 页 Annotation 为“The job was not
+  started because recent account payments have failed or your spending limit needs to be increased”，
+  同时出现在 T1 的 #14 与本 PR 上（账号级问题，不是某个分支的问题）。2026-11-21 本 PR 页面显示
+  **1 successful check**，说明已恢复。Actions 分钟数/付款属于账号级，只有账号持有人能在
+  <https://github.com/settings/billing> 处理。恢复前那轮的本地判据见 `RUNLOG.md` 第 10.9 节，
+  本轮合并后的实跑结果见第 10.10 节。**仓库内仍没有可核验的 run id**（`gh` CLI 在本机不可用），
+  结论只来自组员浏览器截图，报告引用前需组员把 run 链接补进来。
+  `CONTRIBUTING.md` 里「CI 绿才能合并」这条本轮**没有**改。
 - 真实 LLM API 调用需要密钥与费用方案；**尚未执行，零付费调用**。
 - 贡献比例 + 全体签名单独一页是课程硬性要求，须在全员开工后据实填写，不得由 AI 代填。
 
