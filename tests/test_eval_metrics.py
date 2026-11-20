@@ -26,8 +26,11 @@ from eval import metrics as metrics_module
 from eval.evidence import locate_evidence
 from eval.metrics import (
     ALLOWED_GRADES,
+    DEV_QA,
     PENDING_CORRECTNESS,
     QA_COLUMNS,
+    QA_SET_STATUS_OTHER,
+    REVIEW_TABLE,
     QAItem,
     QASetError,
     _config_snapshot,
@@ -40,13 +43,17 @@ from eval.metrics import (
     citations_from_record,
     evaluate_answers,
     evaluate_retrieval,
+    frozen_doc_ids,
     load_grades,
     load_outputs,
     load_qa,
     looks_scripted,
     parse_hits,
+    qa_corpus_binding,
+    qa_set_status,
     resolve_answer_path,
     retrieval_hit_rate,
+    token_occurs,
     unreviewed_items,
     validate_qa_set,
     write_grading_sheet,
@@ -57,6 +64,7 @@ from ragkit.contracts import Chunk, RetrievedChunk
 from ragkit.loaders import load_documents
 
 QA_PATH = ROOT / "eval" / "qa_set.csv"
+DEV_QA_PATH = DEV_QA
 MANIFEST = ROOT / "data" / "raw" / "manifest.json"
 DOC_ID = "rag_wikipedia"
 CORPUS_V0_DOC_IDS = {
@@ -152,19 +160,39 @@ def _record(qid: str, chunk: Chunk, *, answer_text: str = "MOCK answer.", abstai
 
 
 # ---------------------------------------------------------------------------
-# GOLD: the committed QA set against the real corpus
+# GOLD: the committed QA sets against the real corpus
 # ---------------------------------------------------------------------------
 
+# Two QA files are committed and both are checked the same way: the formal
+# Kubernetes set at the I2 path, and the Wikipedia development set the 35 items
+# were moved into. Reading only the first would let the second rot in silence.
+QA_SET_FILES = {"formal": QA_PATH, "dev": DEV_QA_PATH}
 
-def test_qa_set_is_large_enough_and_has_both_categories(qa_items):
-    assert len(qa_items) >= 20, "the assignment needs at least 20 QA pairs"
-    categories = {item.category for item in qa_items}
+
+@pytest.fixture(scope="module", params=["formal", "dev"])
+def committed_qa(request):
+    """``(name, items)`` for each QA file the repository commits."""
+    return request.param, load_qa(QA_SET_FILES[request.param])
+
+
+def expected_covered_docs(name: str) -> set[str]:
+    """Which documents each committed set must have gold quotes in."""
+    if name == "formal":
+        return frozen_doc_ids() - CORPUS_V0_DOC_IDS
+    return set(CORPUS_V0_DOC_IDS)
+
+
+def test_qa_set_is_large_enough_and_has_both_categories(committed_qa):
+    _, items = committed_qa
+    assert len(items) >= 20, "the assignment needs at least 20 QA pairs"
+    categories = {item.category for item in items}
     assert categories == {"answerable", "unanswerable"}
 
 
-def test_every_gold_quote_is_verbatim_source_text(qa_items, documents):
-    spans = validate_qa_set(qa_items, documents)
-    answerable = [item for item in qa_items if item.is_answerable]
+def test_every_gold_quote_is_verbatim_source_text(committed_qa, documents):
+    _, items = committed_qa
+    spans = validate_qa_set(items, documents)
+    answerable = [item for item in items if item.is_answerable]
     assert len(spans) == len(answerable)
     for item in answerable:
         span = spans[item.qid]
@@ -173,25 +201,91 @@ def test_every_gold_quote_is_verbatim_source_text(qa_items, documents):
         assert span.length == len(item.evidence_quote)
 
 
-def test_gold_spans_are_unique_per_qid_and_cover_development_corpus(qa_items, documents):
-    spans = validate_qa_set(qa_items, documents)
+def test_gold_spans_are_unique_per_qid_and_cover_their_own_corpus(committed_qa, documents):
+    name, items = committed_qa
+    spans = validate_qa_set(items, documents)
     assert len({(s.doc_id, s.char_start, s.char_end) for s in spans.values()}) == len(spans)
     covered = {span.doc_id for span in spans.values()}
-    assert covered == CORPUS_V0_DOC_IDS
+    assert covered == expected_covered_docs(name)
 
 
-def test_unanswerable_items_declare_tokens_that_are_really_absent(qa_items, documents):
-    unanswerable = [item for item in qa_items if not item.is_answerable]
+def test_the_two_committed_sets_together_cover_the_frozen_snapshot():
+    """No document in the I1 snapshot is left without a gold quote."""
+    covered = {
+        item.evidence_doc_id
+        for path in QA_SET_FILES.values()
+        for item in load_qa(path)
+        if item.evidence_doc_id
+    }
+    assert covered == set(frozen_doc_ids())
+
+
+def test_committed_qa_files_stay_lf_so_multi_line_gold_survives_checkout():
+    """A CRLF working copy silently breaks the gold quotes that span two lines.
+
+    ``load_qa`` opens the csv with ``newline=""``, so a quoted field keeps whatever
+    line ending the file has, while the corpus is read as text and always has ``\\n``.
+    A gold quote covering two source lines therefore stops matching on a machine that
+    checked the csv out with ``\\r\\n`` - only there, so CI on Linux would stay green.
+    ``.gitattributes`` pins LF; this test keeps that promise from rotting.
+    """
+    for name, path in QA_SET_FILES.items():
+        assert b"\r\n" not in path.read_bytes(), (
+            f"{name} set is CRLF in this working copy, but the repository pins LF; "
+            "the checkout predates .gitattributes - re-clone or re-checkout the file"
+        )
+    multiline = [
+        item.qid
+        for item in load_qa(QA_SET_FILES["formal"])
+        if item.is_answerable and "\n" in item.evidence_quote
+    ]
+    assert multiline, "the formal set lost the gold quotes that span two lines"
+
+
+def test_a_crlf_copy_of_the_formal_set_stops_matching_the_corpus(tmp_path, documents):
+    """Negative control for the byte check above: the failure it prevents is real.
+
+    Rewriting the committed csv with ``\\r\\n`` leaves every single-line quote matching
+    and breaks only the quotes that span two source lines - so a platform-dependent
+    checkout would look like a gold-standard bug rather than a line-ending one.
+    """
+    payload = QA_SET_FILES["formal"].read_bytes().replace(b"\n", b"\r\n")
+    crlf_copy = tmp_path / "qa_set_crlf.csv"
+    crlf_copy.write_bytes(payload)
+    with pytest.raises(QASetError, match="not verbatim"):
+        validate_qa_set(load_qa(crlf_copy), documents)
+
+
+def test_unanswerable_items_declare_tokens_that_are_really_absent(committed_qa, documents):
+    name, items = committed_qa
+    unanswerable = [item for item in items if not item.is_answerable]
     assert len(unanswerable) >= 5, "abstention needs enough refusal cases to be measurable"
     corpus = " ".join(doc.text.lower() for doc in documents)
     for item in unanswerable:
         assert item.absent_tokens, f"{item.qid} declares no ABSENT_TOKENS"
-        assert all(token not in corpus for token in item.absent_tokens)
+        present = [token for token in item.absent_tokens if token_occurs(token, corpus)]
+        assert not present, f"{name}/{item.qid} declares {present} absent, corpus has them"
 
 
-def test_answerable_items_always_have_a_reference_answer(qa_items):
-    assert all(item.reference_answer for item in qa_items if item.is_answerable)
-    assert all(not item.reference_answer for item in qa_items if not item.is_answerable)
+def test_absence_is_judged_on_whole_words_not_substrings():
+    """Reviewer point 4, pinned in both directions.
+
+    ``fee`` must not be reported as present because of ``feedback``, and a
+    declared word must still count when the corpus only inflects it. A rule
+    that only ever loosens would make an unreviewed refusal item look proven.
+    """
+    assert not token_occurs("fee", "we read your feedback carefully")
+    assert token_occurs("gpu", "two gpus are attached")
+    assert token_occurs("hallucination", "fewer hallucinations in answers")
+    assert token_occurs("cost per hour", "the cost\n   per hour is")
+    assert not token_occurs("cost per hour", "the hourly cost of a node")
+    assert not token_occurs("", "anything at all")
+
+
+def test_answerable_items_always_have_a_reference_answer(committed_qa):
+    _, items = committed_qa
+    assert all(item.reference_answer for item in items if item.is_answerable)
+    assert all(not item.reference_answer for item in items if not item.is_answerable)
 
 
 def test_quotes_with_internal_double_quotes_survive_csv_roundtrip(qa_items):
@@ -785,6 +879,21 @@ def test_formal_review_gate_is_currently_closed_on_the_committed_set(qa_items, d
         validate_qa_set(qa_items, documents, require_reviewed=True)
 
 
+def test_review_table_lists_every_refusal_item_still_waiting_for_a_signature():
+    """The sheet a human signs and the csv cannot drift apart.
+
+    Signing is human work and no test may claim it happened. What this can prove
+    is that every item still missing a REVIEWED_BY appears in the checklist, so
+    nobody has to guess which rows are open.
+    """
+    table = REVIEW_TABLE.read_text(encoding="utf-8")
+    pending = unreviewed_items(load_qa(QA_PATH))
+    assert pending, "the formal set is expected to await review until the group signs it"
+    for qid in pending:
+        assert qid in table, f"{qid} needs a signature but is not in the review table"
+    assert "REVIEWED_BY" in table
+
+
 # ---------------------------------------------------------------------------
 # Reviewer point 2: interface I4 answer artifacts (JSONL, retrieved_chunk_ids)
 # ---------------------------------------------------------------------------
@@ -946,6 +1055,42 @@ def test_config_snapshot_uses_the_frozen_i5_field_names():
     assert "@" in snapshot["qa_set_ref"], "a QA reference without a hash cannot be pinned"
 
 
+def test_config_snapshot_records_which_documents_the_rows_cite():
+    """The binding is part of the provenance, not a verbal claim in a PR."""
+    items = load_qa(QA_PATH)[:5]
+    snapshot = _config_snapshot(_stub_settings(), items, min_coverage=0.5)
+    assert set(snapshot["qa_cited_docs"]) == {
+        item.evidence_doc_id for item in items if item.evidence_doc_id
+    }
+    assert set(snapshot["qa_cited_docs"]) <= frozen_doc_ids()
+    assert snapshot["qa_corpus_binding_verified"] is True
+    assert snapshot["qa_docs_outside_frozen_snapshot"] == []
+
+
+def test_qa_set_status_is_derived_from_the_file_and_its_rows():
+    formal = qa_set_status(QA_PATH, load_qa(QA_PATH))
+    dev = qa_set_status(DEV_QA_PATH, load_qa(DEV_QA_PATH))
+    assert formal.startswith("formal Kubernetes QA set")
+    assert dev.startswith("development QA set")
+    assert "not the formal evaluation set" in dev
+    assert formal != dev, "two different sets cannot carry one status string"
+    # the review clause reports what the rows say, so it flips when they sign
+    for path, status in ((QA_PATH, formal), (DEV_QA_PATH, dev)):
+        assert ("awaiting a human REVIEWED_BY" in status) == bool(
+            unreviewed_items(load_qa(path))
+        )
+    assert qa_set_status(ROOT / "eval" / "scratch.csv") == QA_SET_STATUS_OTHER
+
+
+def test_corpus_binding_flags_documents_the_snapshot_does_not_list():
+    """A verbatim quote in some other file must not pass as frozen-corpus gold."""
+    items = [_answerable("M01", QUOTE_2020, doc_id="not_in_the_snapshot")]
+    binding = qa_corpus_binding(items)
+    assert binding["qa_docs_outside_frozen_snapshot"] == ["not_in_the_snapshot"]
+    assert binding["qa_corpus_binding_verified"] is False
+    assert "cites non-snapshot doc" in qa_set_status(QA_PATH, items)
+
+
 def test_summary_bundle_carries_the_five_required_parts(documents, tmp_path, monkeypatch):
     frozen = tmp_path / "frozen_manifest.json"
     frozen.write_text(json.dumps({"corpus_id": "cs5481-corpus-0001"}), encoding="utf-8")
@@ -993,3 +1138,14 @@ def test_formal_gate_refuses_while_the_inputs_are_still_moving(qa_items, tmp_pat
     monkeypatch.setattr("eval.metrics.FROZEN_MANIFEST", tmp_path / "absent.json")
     with pytest.raises(QASetError, match="frozen"):
         assert_formal_inputs(_stub_settings(), qa_items)
+
+
+def test_formal_gate_refuses_the_development_set_even_once_the_corpus_is_frozen():
+    """Reading the wrong file is a problem on its own, hash or no hash."""
+    with pytest.raises(QASetError, match="development set"):
+        assert_formal_inputs(_stub_settings(), load_qa(DEV_QA_PATH), qa_path=DEV_QA_PATH)
+
+
+def test_formal_gate_refuses_an_ad_hoc_qa_file(tmp_path):
+    with pytest.raises(QASetError, match="not a committed team QA artifact"):
+        assert_formal_inputs(_stub_settings(), load_qa(QA_PATH), qa_path=tmp_path / "qa.csv")

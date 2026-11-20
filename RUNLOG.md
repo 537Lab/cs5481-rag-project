@@ -675,3 +675,266 @@ These numbers describe MOCK fixtures only. Do not put them in the report.
 给后面合并同一个仓库的人一句提示：解冲突时先 `git show <自己的提交>:<文件>` 看一眼自己写过什么，
 `--theirs` 不是免费的。
 
+---
+
+## 9. 正式 Kubernetes 评测集的创建，与 PR #14 两处调整的复核（2026-11-20，T4 第二轮）
+
+PR #14（分支 `t1-corpus-kubernetes-v135`，head `50e9985`）留了两条给 T4 的话：
+「#14 对 `eval/qa_set.csv` 和 `tests/test_eval_metrics.py` 有少量调整，请 T4 负责人确认」，
+以及「目前 35 道 QA 仍是 Wikipedia 开发集，正式 Kubernetes QA 还需要 T4 创建并人工审核」。
+本轮完成前者的 review、以及后者的**创建**；**人工审核一步没有做，也做不了** ——
+`REVIEWED_BY` 是一个组员的名字，不能由 agent 代填（见 §9.7）。
+
+分支 `t4-k8s-qa-set`，基点是**尚未合并**的 `pr/14`：正式题只能引用 I1 冻结快照里的那 12 篇
+Kubernetes 文档，而这些文档此刻只在 #14 里。环境与前两轮相同（Windows + `.venv`，
+Python 3.13.5，本地 ONNX embedding + 本地 Chroma，**零付费调用**）；下文命令一律写成仓库内
+可移植形式，实际由 `.venv\Scripts\*.exe` 在同一台机器上执行。
+
+### 9.1 PR #14 两处调整的复核结论
+
+| #14 的调整 | 本轮查到的真实原因 | 结论 |
+| --- | --- | --- |
+| `N07` 的 `ABSENT_TOKENS` 由 `charge; fee` 改成 `charge for reusing; licensing fee` | 旧检验是裸子串匹配：`fee` 命中的是语料里的 **`feedback`**，并不能证明「收费」这件事在语料中出现过 | **接受**。但根因在检验器不在题目，§9.2 已改成词边界匹配；以后组员不必再为了躲开偶然去改写措辞 |
+| 测试新增 `CORPUS_V0_DOC_IDS` 常量，并把「覆盖所有文档」改成「覆盖开发语料」 | 语料从 4 篇扩到 16 篇后，35 道 Wikipedia 开发题本来就不该覆盖 12 篇新文档 | **接受**。本轮进一步把「覆盖」变成两份文件各自的硬要求，并新增一条「两份合起来必须覆盖整个快照」的检查 |
+
+#14 在本机 worktree（`pr/14` 全量检出，验证完即删除）的真实结果：
+
+```
+$ ruff check .
+exit=0
+All checks passed!
+
+$ python -m eval.metrics validate            # 此时 qa_set.csv 仍是 35 题开发集
+exit=0
+[REAL] validated qa_set.csv: 35 items (27 answerable, 8 unanswerable)
+documents consulted: 16; all 27 gold quotes resolve to a source character span
+
+$ python -m pytest -o addopts="" -q
+exit=1
+FAILED tests/test_loaders.py::test_frozen_manifest_hashes_match_committed_documents
+1 failed, 132 passed, 2 skipped in 10.60s
+```
+
+### 9.2 失败项定位：冻结语料的字节在 Windows 上被换行符改写（阻塞 #14，与 T4 代码无关）
+
+`tests/test_loaders.py` 用 `read_bytes()` 比较磁盘字节与 `frozen_manifest.json` 记录的 SHA-256，
+而 `scripts/fetch_corpus.py` 也是按字节记的哈希。逐篇比对（临时脚本，输出留在 gitignored 的
+`.tmp/frozen_check.txt`）：
+
+```
+k8s_v135_stateless_deployment   disk=DIFF blob=OK disk_eol=CRLF blob_eol=LF bytes=6305/6081
+16 docs: disk mismatch=16, git-blob mismatch=0
+```
+
+本机 `git config core.autocrlf` = `true`，仓库里**没有 `.gitattributes`**：git 对象是 LF（所以哈希对得上），
+Windows 工作副本被检出成 CRLF（所以逐篇字节都对不上）。结论：#14 的这个测试在 Linux runner 上恒绿、
+在 Windows 组员机器上恒红 —— CI 掩盖了它，不是它自己会修好。`ragkit/loaders.py` 用的是
+`read_text()`（通用换行 → LF），所以 gold 引文匹配跨平台仍然稳定，**受影响的是字节哈希**：
+除该测试外，`metrics.py` 里 `corpus_ref` / `qa_set_ref` 的 `_sha256()` 同样按字节算，跨平台取值不同。
+
+本轮修法：新增 `.gitattributes`，规则只有 `* text=auto eol=lf` 加注释。先确认过
+`git grep --cached` 在**任何已提交文本里都找不到 CR**，因此这条规则不会改动任何 blob，
+`git add --renormalize data/raw` 之后 `git diff --cached HEAD` 对语料为空 —— 对组员看到的
+仓库内容零副作用，只把「检出时不要改写换行」写进版本库。改完后本机：
+
+```
+disk-vs-manifest mismatches now: 0
+$ python -m pytest -o addopts="" -q tests/test_loaders.py
+exit=0
+17 passed in 0.48s
+```
+
+同一个根因还会打到新正式集上，这里补一句：`load_qa()` 以 `newline=""` 开文件，所以 `QUOTE_ALL` 写入的
+跨行 gold 引文会**原样保留文件里的换行字节**，而语料走 `read_text()` 永远是 `\n`。把本轮的
+CSV 拷一份改成 CRLF（其余一字不动）实跑：
+
+```
+$ python -m eval.metrics validate --qa .tmp/qa_set_crlf.csv
+ERROR: K02: evidence quote is not verbatim source text of doc_id='k8s_v135_components': '[etcd](/docs/concepts/architecture/#etcd)\r\n: Consistent and '
+K03: evidence quote is not verbatim source text of doc_id='k8s_v135_components': '[kube-proxy](/docs/concepts/architecture/#kube-proxy) (optio'
+exit=2
+```
+
+只有 K02/K03 报错，因为它们是全集唯二跨行的引文。这就是「平台相关的检出伪装成 gold 标准有错」，
+所以除了 `.gitattributes`，本轮还钉了两个测试：`test_committed_qa_files_stay_lf_so_multi_line_gold_survives_checkout`（检查两份已提交 CSV 的字节）与
+`test_a_crlf_copy_of_the_formal_set_stops_matching_the_corpus`（反向控制，证明上一条检查对应的失败真实存在）。
+
+### 9.3 `eval/metrics.py` 的三处改造
+
+1. **删掉 `QA_SET_STATUS` 常量**，改为 `qa_set_status(path, items)` **按内容推导**：文件名
+   决定它是正式集还是开发集；`qa_corpus_binding()` 再决定这些 gold 是否只引用 I1 快照列出的
+   `doc_id`；未签名的拒答题数量决定要不要追加一句「N refusal label(s) awaiting a human
+   REVIEWED_BY」。`_config_snapshot`、`_qa_ref` 与 `validate` 都用它，因此报告里的状态由
+   读到的文件说，不由命令行上的自述说。
+2. **`token_occurs()` 取代裸子串检验**：词首要求词边界（`fee` 不再等于 `feedback`），词尾允许
+   英语词形（`gpu` 命中 `gpus`、`hallucination` 命中 `hallucinations`），词组内的空格按 `\s+`
+   匹配（换行不能藏住一次出现）。两个方向都有测试钉住，只往一边松的规则活不下去。
+3. **两道门变严**：`assert_formal_inputs()` 新增「读的不是 I2 路径的正式集」与「gold 引用了快照
+   之外的文档」两类拒绝，拒绝信息里给出待签名清单的路径；`cmd_validate` 多打三行：语料绑定、
+   快照中尚无 answerable 题的文档、复核表位置。
+
+### 9.4 两份 QA 文件
+
+35 题保留为开发集，**内容未改一行**，只换了文件名（`git mv` 保留历史）；I2 唯一的
+`eval/qa_set.csv` 路径现在放的是正式 Kubernetes 集，所以默认参数下 T2/T3/T5 拿到的就是正式集。
+「内容未改一行」不是口径而是可验的：改名后的 blob 与改名前同一个对象（工作副本已按
+`.gitattributes` 归一为 LF，归一不改动提交内容）：
+
+```
+$ git rev-parse HEAD:eval/qa_set.csv
+6836eab750cab9aa2872340bb1d43a2e4497bb26
+$ git rev-parse :eval/qa_set_dev_v0.csv
+6836eab750cab9aa2872340bb1d43a2e4497bb26
+```
+
+```
+$ git mv eval/qa_set.csv eval/qa_set_dev_v0.csv
+$ python -m eval.metrics validate --qa eval/qa_set_dev_v0.csv
+[REAL] validated qa_set_dev_v0.csv: 35 items (27 answerable, 8 unanswerable)
+documents consulted: 16; all 27 gold quotes resolve to a source character span
+QA set status: development QA set on the four CORPUS_V0 Wikipedia documents, not the
+formal evaluation set; 8 refusal label(s) awaiting a human REVIEWED_BY
+```
+
+正式集 `eval/qa_set.csv`：**36 条 = 26 answerable（K01–K26）+ 10 unanswerable（KN01–KN10）**，
+覆盖冻结快照全部 12 篇 Kubernetes 文档（每篇 2–3 题）。gold 引文不是手打的：按
+`(doc_id, 行号[, 结束行])` 从快照原文切片，断言该片段在整篇文档中**恰好出现一次**且非空，
+并把行号写进 `notes`（`gold spans snapshot lines X-Y`）供复核人定位；CSV 用 `QUOTE_ALL` + `\n`
+写出，因此一条引文可以跨多行（K02 取 `components` 第 17–18 行，因为 etcd 的名字与定义分在两行）。
+10 条拒答题分 OUT-OF-DOMAIN（价格、默认口令、历史）与 NEAR-MISS（语料谈到同一对象但没问的性质），
+`notes` 里如实写出复核人应当怀疑的线索，例如 KN03 说明 `services.md` 链接到 `.go` 源文件——
+这暗示了语言却没有陈述它，算不算答案要人判。
+
+本轮自查改掉的四处（都是先写错、机检发现、再改）：
+
+- K02/K03 的引文以 `": "` 开头，不含主语（名字在上一行）→ 改成取跨行的 17–18、36–37；
+- K26 的问题里「that tutorial」指代不明 → 直接点名 stateless application deployment tutorial；
+- KN06 的理由写成了「Liveness/Liveness probe sections」→ 改为 Liveness/Readiness/Startup 三节；
+- KN03 的理由没披露 `.go` 链接这一条存在线索 → 补进 `notes`，不把它当成「语料无法回答」藏起来。
+
+一开始想用的 `design document`、`implemented in`、`mysql`、`cannot exceed`、`borg` 几个 token
+全部被机检拦下（它们在快照里真的出现），已换词；最终 23 个 token 全部确认不存在。
+
+### 9.5 验收命令（真实执行）
+
+```
+$ ruff check .
+exit=0
+All checks passed!
+
+$ python -m eval.metrics validate
+exit=0
+[REAL] validated qa_set.csv: 36 items (26 answerable, 10 unanswerable)
+documents consulted: 16; all 26 gold quotes resolve to a source character span
+  k8s_v135_components          3 answerable items
+  k8s_v135_configmaps          2 answerable items
+  ...（共 12 篇，每篇 2–3 条）
+  k8s_v135_stateless_deployment   2 answerable items
+gold span sample (strategy-independent):
+  K01 k8s_v135_components chars 175-253
+  K02 k8s_v135_components chars 504-620
+  K03 k8s_v135_components chars 1274-1396
+unanswerable absence checks: 23 tokens confirmed absent from the corpus as whole words - a NECESSARY condition only, the absence
+of a word does not prove the corpus cannot answer the question
+human review of unanswerable labels: 0/10 carry REVIEWED_BY (pending: KN01, KN02, KN03, KN04, KN05, KN06, KN07, KN08, KN09, KN10)
+  checklist for the reviewers: eval/review/formal_qa_review.md
+corpus binding: 12 doc(s) cited, verified against the frozen snapshot: True
+frozen documents with no answerable item (4/16): bm25_wikipedia, rag_wikipedia, vector_db_wikipedia, word_embedding_wikipedia
+corpus checked against: data/raw/manifest.json@3e3e4e4217df; frozen snapshot (I1) present
+QA set status: formal Kubernetes QA set (interface I2), gold quotes verbatim in the frozen corpus snapshot; 10 refusal label(s) awaiting a human REVIEWED_BY
+
+$ python -m eval.metrics validate --require-reviewed
+exit=2
+ERROR: unanswerable item(s) without a human REVIEWED_BY attestation: KN01, KN02, KN03, KN04, KN05,
+KN06, KN07, KN08, KN09, KN10 - absent tokens are a necessary condition, not proof that the corpus cannot answer
+
+$ python -m pytest -o addopts="" -q
+exit=0
+148 passed, 2 skipped in 5.28s
+```
+
+测试数从 #14 基线的 132 passed / 1 failed / 2 skipped 到 **148 passed / 0 failed / 2 skipped**（+15）：
+新增用例 10 个（两份集合计覆盖、词边界双向、换行字节与 CRLF 反向控制、复核表一致性、绑定入快照与越界、
+开发集/临时文件的 formal 拒绝），GOLD 区 5 个用例改成 `committed_qa` 参数化后各跑两份；`tests/test_eval_metrics.py`
+从 67 例到 82 例。本轮未删除任何首轮或 #14 的用例。`-o addopts=""` 与前两轮同因：
+`pyproject.toml` 的 `addopts` 已含 `-q`，重复传无副作用，保留是为了跟 RUNLOG 历史记录可对比。
+2 个 skipped 仍是 `tests/test_e2e_real.py`（需 `RUN_REAL_E2E=1`，其中一个还需 `OPENAI_API_KEY`），本轮未开启。
+
+### 9.6 REAL 检索命中率（正式集与开发集，同一个索引）
+
+真实入库 16 篇 → 668 chunks（`fixed` size=600 overlap=80，本地 ONNX MiniLM dim=384，`top_k=3`，
+`min_coverage=0.5`），未动 `config.toml`，零付费调用：
+
+```
+$ python -m ragkit.cli ingest
+OK: 16 documents -> 668 chunks stored in collection 'chunks_fixed'
+
+$ python -m eval.metrics retrieval --hits 1,3 --min-coverage 0.5 --label REAL --out eval/results/raw/retrieval_k8s_formal.json
+[REAL] retrieval metrics
+  min_coverage               0.5
+  n_items                    36
+  n_answerable               26
+  n_unanswerable             10
+  hit@1                        8/26  0.3077
+  hit@3                       18/26  0.6923
+
+$ python -m eval.metrics retrieval --qa eval/qa_set_dev_v0.csv --hits 1,3 --min-coverage 0.5 --label REAL --out eval/results/raw/retrieval_wikipedia_dev.json
+[REAL] retrieval metrics
+  n_items                    35
+  n_answerable               27
+  hit@1                       16/27  0.5926
+  hit@3                       23/27  0.8519
+```
+
+两组数字来处同一个索引，可直接对比：**正式集上的 hit@1 只有开发集的一半多一点（0.3077 vs 0.5926），
+hit@3 从 0.8519 降到 0.6923**。这不是「代码坏了」的巧合，而是领域真的变了：Kubernetes 参考页里的命令、
+表格与字段名和 Wikipedia 散文的表达方式不同，同一个 fixed+MiniLM 组合在新领域上明显更差。报告里
+**不要把这两个率平均成「我们的命中率」**（`judge_protocol.md` §5 已新增一条领域差异的说明）。
+
+一个值得记下来的观察：开发集的 16/27 与 23/27 与第 7.2 / 8.1 节在**只有那 4 篇 Wikipedia 文档**时
+跑出的两个数字完全一致。分母相同（27 道 answerable），索引里的 chunk 从 28 块涨到 668 块，
+命中题集却一题未变。本轮**没能在机检里解释这个现象**（它可能只是那 27 道题足够显著），
+只把它当作“开发集行为未被本轮修改破坏”的旁证据，不当做结论写。
+
+另：这两个文件只落在 gitignored 的 `eval/results/raw/`，没进 `summary/`：拒答标注未复核，
+`--formal` 会被拒，这是当前应有的状态。
+
+### 9.7 hit@3 未命中的 8 题归因（切片问题还是排序问题）
+
+因为命中率明显偏低，本轮逐条检查了未命中题的 gold 区间是否**可能被任何 chunk 命中**：用与入库相同的
+`fixed 600/80` 本地重切，取该文档内覆盖该区间比例最高的 chunk：
+
+```
+K03 span 1274-1396 best_coverage=1.00 chunks_touching=1 hit@3=False
+K06 span 1249-1342 best_coverage=1.00 chunks_touching=1 hit@3=False
+K12 span 8626-8727 best_coverage=1.00 chunks_touching=2 hit@3=False
+K13 span 12462-12543 best_coverage=1.00 chunks_touching=1 hit@3=False
+K18 span 15308-15401 best_coverage=1.00 chunks_touching=1 hit@3=False
+K19 span 23886-23971 best_coverage=1.00 chunks_touching=1 hit@3=False
+K21 span 13534-13614 best_coverage=1.00 chunks_touching=1 hit@3=False
+K25 span 0-79       best_coverage=1.00 chunks_touching=1 hit@3=False
+items whose gold span no single 600-char chunk covers by 0.5: []
+```
+
+结论：26 道正式题的 gold 区间**全部被某个 chunk 完整覆盖**（best_coverage=1.00），未命中不是跨边界
+或 `min_coverage=0.5` 阈值造成的，而是**相关 chunk 没进 top-3**。这应该归入 T3（检索层）的失败样本，
+T2 的 chunking 对比可以拿「不存在因切片而不可命中的题」作为前提检查。未命中题中有一个模式值得注意：
+K25 的 gold 是教程首句（`stateless_deployment` 第 1 行），top-3 全是 `pods`/`probes` 的首块 —— 问题里
+的“tutorial”在索引中没有任何可区分的信号，这是领域文档本身的特点，不是引文写错了。
+
+### 9.8 本轮明确未执行 / 未做
+
+- **人工审核（#14 里要的第二件事）没做，也不是本轮能做的**：`eval/qa_set.csv` 的 10 条拒答标注全部
+  没有 `REVIEWED_BY`。已备好待签名的工作单 `eval/review/formal_qa_review.md`（逐题列出要重读的页面、
+  要搜的词、需要时改动哪一行）与第 3 节签名区。组员签完后才能重跑 `--require-reviewed` / `--formal`。
+- `--summary-dir` + `--formal` 的**成功路径**仍未执行：两个门现在多了一个「必须是正式集文件」，但
+  拒答标注未复核这一条就足以拦住它；代码路径由测试用临时目录覆盖。
+- `score` 对 REAL 答案产物的打分：仍未执行（需要 T5 的真 `eval/answers/<run_id>.jsonl`）；
+  `answer_correctness` 依旧无数字（`pending human grading`）。
+- `paragraph` 策略的命中率：本轮未测（本机 collection 只有 `chunks_fixed`）；第 9.6 节两个率都是
+  `fixed 600/80`，不能代表全项目。
+- 36 道题的人工逐题阅读：本轮只做了机检（逐字、唯一性、跨行覆盖、领域内部、token 不存在）与写作
+  自查（§9.4）。机检只能证明引文存在，不能证明题目清楚。
+
+
+
