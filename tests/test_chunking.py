@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -17,7 +18,7 @@ from eval.chunking_experiment import (
     write_result,
 )
 from eval.evidence import locate_evidence
-from eval.metrics import QAItem, QASetError, load_qa, retrieval_hit_rate
+from eval.metrics import DEFAULT_QA, SUMMARY_DIR, QAItem, QASetError, load_qa, retrieval_hit_rate
 from ragkit.chunking import (
     ChunkConfig,
     FixedSizeChunker,
@@ -307,6 +308,68 @@ def test_payload_rejects_strategies_that_do_not_share_parameters():
             command="python -m eval.chunking_experiment",
             formal=False,
         )
+
+
+def test_development_out_cannot_land_inside_summary():
+    relative = Path("eval") / "results" / "summary" / "chunking_comparison"
+    nested = Path("eval") / "results" / "raw" / ".." / "summary" / "chunking_comparison"
+    for target in (relative, nested, SUMMARY_DIR / "chunking_comparison"):
+        with pytest.raises(QASetError, match="cannot write a development run"):
+            resolve_destination(
+                formal=False,
+                settings=load_settings(),
+                items=load_qa(),
+                summary_dir=SUMMARY_DIR / "chunking_comparison",
+                raw_dir=target,
+            )
+        assert not (ROOT / "eval" / "results" / "summary" / "chunking_comparison").exists()
+    assert main(["--out", str(relative)]) == 2
+    assert not (ROOT / relative).exists()
+
+
+def test_development_out_rejects_a_symlink_into_summary(tmp_path):
+    link = tmp_path / "summary-link"
+    try:
+        link.symlink_to(SUMMARY_DIR, target_is_directory=True)
+    except OSError:
+        import subprocess
+
+        created = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(SUMMARY_DIR)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if created.returncode != 0:
+            pytest.skip("this machine does not allow the test to create a symlink")
+    with pytest.raises(QASetError, match="cannot write a development run"):
+        resolve_destination(
+            formal=False,
+            settings=load_settings(),
+            items=load_qa(),
+            summary_dir=SUMMARY_DIR / "chunking_comparison",
+            raw_dir=link,
+        )
+
+
+def test_formal_rejects_dev_and_arbitrary_qa_paths(tmp_path):
+    summary = tmp_path / "summary" / "chunking_comparison"
+    body = DEFAULT_QA.read_text(encoding="utf-8")
+    for name in ("qa_set_dev_v0.csv", "arbitrary_questions.csv"):
+        qa_file = tmp_path / name
+        qa_file.write_text(body, encoding="utf-8")
+        with pytest.raises(QASetError, match="committed set"):
+            resolve_destination(
+                formal=True,
+                settings=load_settings(),
+                items=load_qa(qa_file),
+                summary_dir=summary,
+                raw_dir=tmp_path / "raw",
+                qa_path=qa_file,
+            )
+        assert not summary.exists()
+    assert main(["--formal", "--qa", str(tmp_path / "qa_set_dev_v0.csv")]) == 2
+    assert not (SUMMARY_DIR / "chunking_comparison").exists()
 
 
 def test_formal_bundle_keeps_the_hit_rate_objects(tmp_path):

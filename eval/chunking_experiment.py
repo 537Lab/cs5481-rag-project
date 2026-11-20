@@ -13,11 +13,13 @@ and T5. No LLM is called.
 OUTPUT
 ------
 A default run is a development run. It prints a development banner and writes
-JSON under ``eval/results/raw/chunking_comparison/`` (gitignored). It does not
-create ``eval/results/summary/``.
+JSON under ``eval/results/raw/chunking_comparison/`` (gitignored). ``--out``
+may choose another development directory, but not anywhere inside
+``eval/results/summary/`` (relative paths and symlinks included).
 
-``--formal`` asks ``eval.metrics.assert_formal_inputs`` first. Only if that
-accepts the corpus snapshot and the QA review state does this write
+``--formal`` asks ``eval.metrics.assert_formal_inputs`` first and passes the
+QA path that was actually loaded. Only the committed ``eval/qa_set.csv`` can
+enter that gate. Only if the gate accepts does this write
 ``eval/results/summary/chunking_comparison/``. There is no bypass.
 
 COMMANDS (repository root)
@@ -30,6 +32,7 @@ COMMANDS (repository root)
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import sys
 from collections.abc import Sequence
@@ -172,6 +175,47 @@ def compare_retrieval(
     }
 
 
+def _resolved(path: str | Path) -> Path:
+    """Absolute path from the repo root, with ``..`` and symlinks resolved."""
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        candidate = ROOT / candidate
+    return candidate.resolve()
+
+
+def _inside(path: Path, parent: Path) -> bool:
+    return path == parent or parent in path.parents
+
+
+def development_destination_allowed(path: str | Path) -> bool:
+    """Development output must stay out of the formal summary tree."""
+    return not _inside(_resolved(path), SUMMARY_DIR.resolve())
+
+
+def _require_committed_qa(qa_path: str | Path) -> None:
+    """A formal comparison can only score the committed QA file.
+
+    T4's gate checks whichever path it is given. Passing the default while
+    ``--qa`` pointed somewhere else would let a development set through.
+    """
+    resolved = _resolved(qa_path)
+    committed = DEFAULT_QA.resolve()
+    if resolved != committed:
+        raise QASetError(
+            "--formal refused: QA file must be the committed set "
+            f"{_relative(committed)}, got {_relative(resolved)}. "
+            "A development or ad-hoc file cannot be published as FORMAL."
+        )
+
+
+def _assert_formal(settings: Settings, items: Sequence[QAItem], qa_path: str | Path) -> None:
+    _require_committed_qa(qa_path)
+    if "qa_path" in inspect.signature(assert_formal_inputs).parameters:
+        assert_formal_inputs(settings, items, qa_path=qa_path)
+        return
+    assert_formal_inputs(settings, items)
+
+
 def resolve_destination(
     *,
     formal: bool,
@@ -179,12 +223,19 @@ def resolve_destination(
     items: Sequence[QAItem],
     summary_dir: Path,
     raw_dir: Path,
+    qa_path: str | Path = DEFAULT_QA,
 ) -> Path:
     """Formal output is created only after the frozen-input check succeeds."""
     if formal:
-        assert_formal_inputs(settings, items)
+        _assert_formal(settings, items, qa_path)
         summary_dir.mkdir(parents=True, exist_ok=True)
         return summary_dir
+    if not development_destination_allowed(raw_dir):
+        raise QASetError(
+            "--out cannot write a development run inside "
+            f"{_relative(SUMMARY_DIR)} ({_relative(_resolved(raw_dir))}). "
+            "Development numbers stay in eval/results/raw/."
+        )
     raw_dir.mkdir(parents=True, exist_ok=True)
     return raw_dir
 
@@ -489,6 +540,7 @@ def _run(args: argparse.Namespace, recorded: Sequence[str]) -> int:
         items=items,
         summary_dir=summary_dir,
         raw_dir=raw_dir,
+        qa_path=args.qa,
     )
 
     hits_by_strategy: dict[str, dict[str, list[RetrievedChunk]]] = {}

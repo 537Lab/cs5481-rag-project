@@ -85,6 +85,6 @@ A17 说明为什么不能改用 chunk id。gold 是 `vector_db_wikipedia` 的 29
 
 ## 这次没有做的事
 
-- 没有把开发数字写进 `eval/results/summary/`。`--formal` 的退出码是 2，原因是 I1 快照不存在，以及 8 道 unanswerable 题没有 `REVIEWED_BY`。
+- 没有把开发数字写进 `eval/results/summary/`。`--out` 指向这个目录（含相对路径和符号链接）会被拒绝。`--formal` 只接受已提交的 `eval/qa_set.csv`，并且当前退出码是 2，原因是 I1 快照不存在，以及 8 道 unanswerable 题没有 `REVIEWED_BY`。
 - 没有调用 LLM，没有回答正确率，没有拒答率。
 - 语料或 QA 冻结之后，要用同一命令重跑，并只有在 `--formal` 通过之后才能把汇总放进 `summary/chunking_comparison/`。
