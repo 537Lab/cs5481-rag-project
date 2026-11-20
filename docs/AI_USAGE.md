@@ -68,3 +68,7 @@
 不要把示例句直接照抄。T4 的验证命令仍是编码 agent 跑的。T2 的第一行也是 agent 跑的；第二行才是组员本人于 2026-11-17 20:50 重跑验收命令，其中只有 `python -m eval.chunking_experiment` 的退出码和 JSON 时间戳留在本机记录里。
 T2 的 hit@k 仍是开发集上的检索，不是冻结语料上的正式实验；回答正确率至今为 0。
 贡献比例页须在全员开工后据实填写。
+
+| 2026-11-20 | T5 | Codex | Added heuristic citation coverage, invalid-output refusal, batch I4 export, offline demo and tests on branch t5-generation-validation. Agent ran the checks documented in ANSWER_QUALITY.md. | User review and personal rerun Pending. No human review signatures or formal metrics supplied. |
+
+| 2026-11-20 | T5 follow-up | Codex | Added shared refusal diagnostics, MOCK batch subprocess coverage and atomic-publication failure cleanup tests, updated demo instructions. | Agent executed 37 T5/offline tests and 156 passing tests with test_store.py excluded (3 skipped). Full suite still crashes in Chroma outside sandbox. Human code review and personal rerun Pending. |
