@@ -1102,3 +1102,21 @@ exit=2
 给 T2 的一句话：`--formal` 不需要改代码，等 `REVIEWED_BY` 签完就能跑；T2 的 `DEVELOPMENT_NOTE`
 里「the current qa_set.csv … not frozen formal inputs」这句已与本仓库现状不符（只报告，本轮没改 T2 的文件）。
 
+### 10.11 PR 编号与组员账号：一条被浏览器现场证伪的推断（2026-11-21）
+
+本轮试图用浏览器把新的 PR 描述贴上去，会话未登录，按预设的停止条件退出（没有输入任何凭据）。
+但这次探测从 PR 列表页拿到了三条仓库内无法得到的事实，其中**推翻了我昨天写进 `docs/DEV_LOG.md` 的一句话**：
+
+| 项 | 之前的说法（仅基于 git 取证） | 现在的实际情况 |
+| --- | --- | --- |
+| 本 PR 编号 | 不敢写，正文里用「`t4-k8s-qa-set` 那个 PR」占位 | **#15**（`wangsaorui wants to merge 8 commits into main from t4-k8s-qa-set`） |
+| T5 | 「远端已有分支 `t5-generation-validation`，但仓库内看不到对应 PR」 | **已开 PR #16**（作者 `ziqilin669`，标题含 citation coverage / I4 batch export / offline demo） |
+| 组员账号 | T1 `yafeili39-arch`、T2 `null1024-ws`、T3 `usagi`（按 commit author） | PR 页还出现了 `ldk13856478627-cell`（#14 作者）与 `ziqilin669`；**账号 ↔ 任务 ↔ 真人姓名仍未核实** |
+
+`docs/DEV_LOG.md` 的三处对应描述已改。这里把错与改都记下来，而不只记结论：**仅凭 `git for-each-ref`
+看到分支就推断「没人认领」是不成立的**，分支可以存在而 PR 后开。以后遇到同类推断，本仓库没有
+`gh` CLI 就没有权威数据源，只能写「待核实」而不能写「没有」。
+
+顺带一条对 reviewer 有用的：#15 页面上显示的是 **8 commits / +9,748 −250 / 29 files**，其中包含
+尚未合并的 #14 全部内容（base = `main` 的必然结果，不是本 PR 多写了代码）。
+

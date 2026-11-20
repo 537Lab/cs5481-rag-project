@@ -13,9 +13,9 @@
 | **GitHub Actions** | 云端 runner 上的 CI 验证 | 单独记为云端验证，不与本地命令混同，也不等于人工复核 |
 
 **截至本记录，仓库账号持有人本人在做 T4。main 上已合并的组员 PR：T1 的 #13（loader 加固）、
-T2 的 #10（分块对比）、T4 的 #7（评测指标）**；仍未合并：T1 的 #14（冻结 Kubernetes 语料）、
-T3 的 #11（检索诊断）；T5 远端已有分支 `t5-generation-validation`（`99c0694`），是否已开 PR
-在本仓库内不可核验。因此「全组已确认」一类表述仍不能写。以下 bootstrap 内容全部属于
+T2 的 #10（分块对比）、T4 的 #7（评测指标）**；仍 open：T1 的 #14（冻结 Kubernetes 语料）、
+T3 的 #11（检索诊断）、T4 本轮的 **#15**（分支 `t4-k8s-qa-set`）、T5 的 **#16**。
+因此「全组已确认」一类表述仍不能写。以下 bootstrap 内容全部属于
 规范化与文档定稿阶段，由 AI Agent 在仓库账号持有人授权下执行。是否逐项人工复核，
 仓库内没有可核验记录，**需由本人确认后补充**；不能据本文件推断为「某人已亲自执行/审阅」。
 
@@ -51,14 +51,16 @@ PR 历史与 commit message 是贡献比例的**证据来源**，本文件只是
 
 ## 已知限制与需人工处理
 
-- 仓库为私有。其他组员现在已有贡献记录（T1 `yafeili39-arch`、T2 `null1024-ws`、T3 `usagi`），
-  但是否已把 4 人都加为 Collaborator、以及每人对应哪个 GitHub 账号，**仓库内没有可核验记录**，
+- 仓库为私有。PR 列表页观察到的账号：`wangsaorui`（本账号，T4）、`ldk13856478627-cell`（#14 作者）、
+  `ziqilin669`（#16 / T5 作者）；按 commit author 还能看到 `yafeili39-arch`、`null1024-ws`、`usagi`。
+  **账号 ↔ 任务 ↔ 真人姓名的对应关系仍未核实**，且这些观察来自浏览器页面（本机无 `gh` CLI，
+  仓库内无可核验记录），是否已把 5 人都加为 Collaborator 同样待确认；
   报告里的贡献声明页需本人逐人核实。
 - GitHub Free + 私有仓库不支持强制分支保护 / Rulesets（API 403），PR review 规则靠人工执行。
 - 技术取舍、应用领域与协作规则仍需五人共同确认；五个任务中 T1–T4 已各有 PR
   （#14 / #10 / #11 / #7），**已合并的是 T4 的 #7、T1 的 #13 与 T2 的 #10**，T1 的 #14（正式语料）
-  与 T3 的 #11 仍未合并；T5 有分支 `t5-generation-validation` 但仓库内看不到对应 PR，
-  不能写成「全组已确认」。
+  与 T3 的 #11 仍未合并；T5 已开 #16（标题含 citation coverage / I4 batch export / offline demo），
+  之前写的「T5 无人认领、看不到 PR」已被 PR 列表页证伪，不能写成「全组已确认」。
 - QA 集现状：`eval/qa_set.csv` 已是**正式 Kubernetes 集**（36 条 = 26 answerable + 10 unanswerable，
   逐字引自 `data/raw/frozen_manifest.json` 快照的 12 篇文档并全覆盖）；35 题 Wikipedia 集保留为
   `eval/qa_set_dev_v0.csv`（开发集）。仍未完成的：**10 条 `unanswerable` 标注至今无人写
