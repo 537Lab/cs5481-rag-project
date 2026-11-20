@@ -45,6 +45,12 @@
 > 直接影响命中率与正确率的可信度）；`judge_protocol.md` 规定 LLM 不得用于编撰或审查 gold quote。
 > 两轮均**零付费 API 调用**，`answer_correctness` 尚无数字（人评未开始）。
 
+## 组员追加记录（T1，任务包 #1）
+
+| 日期 | 任务包 | AI / Agent 名称 | 具体用途（生成什么、改哪些文件） | 我亲自复核了什么 | 我亲自跑了哪些命令 | 云端 CI 结果 | PR 号 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-11-17 | T1 | OpenAI Codex（编码 agent） | 辅助认领 Issue #1；修改 `ragkit/loaders.py`，增加 UTF-8、必填出处/许可、重复路径与重复内容校验；扩充 `tests/test_loaders.py` 边界测试；未采集或改动正式语料 | **尚未由负责人逐项人工复核**；需在 PR review 时阅读实现并确认能解释失败策略与 MOCK 例外 | 无；以下命令均由 Codex 在本机执行：`pytest tests/test_loaders.py -q`、`pytest -q`、`ruff check .`、`ragkit.cli offline-demo` | `ci / check` 已通过 | PR #13 |
+
 ## 组员追加记录（T1，正式语料快照）
 
 | 日期 | 任务包 | AI / Agent 名称 | 具体用途（生成什么、改哪些文件） | 我亲自复核了什么 | 我亲自跑了哪些命令 | 云端 CI 结果 | PR 号 |
