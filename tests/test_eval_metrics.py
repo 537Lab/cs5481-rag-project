@@ -866,32 +866,25 @@ def test_require_reviewed_fails_until_a_human_signs_off(documents):
     assert set(spans) == {"M01"}, "unanswerable items have no gold to resolve"
 
 
-def test_formal_review_gate_is_currently_closed_on_the_committed_set(qa_items, documents):
-    """No named human has signed the refusal labels yet, so --require-reviewed fails.
-
-    When the group does review them this test flips on purpose: update it in the
-    same PR that adds the REVIEWED_BY names, do not simply delete it.
-    """
+def test_formal_review_gate_is_open_on_the_committed_set(qa_items, documents):
+    """Every committed refusal label has a named reviewer, so the gate passes."""
     unanswerable = [item for item in qa_items if not item.is_answerable]
     assert unanswerable
-    assert unreviewed_items(unanswerable)
-    with pytest.raises(QASetError, match="REVIEWED_BY"):
-        validate_qa_set(qa_items, documents, require_reviewed=True)
+    assert unreviewed_items(unanswerable) == []
+    spans = validate_qa_set(qa_items, documents, require_reviewed=True)
+    assert set(spans) == {item.qid for item in qa_items if item.is_answerable}
 
 
-def test_review_table_lists_every_refusal_item_still_waiting_for_a_signature():
-    """The sheet a human signs and the csv cannot drift apart.
-
-    Signing is human work and no test may claim it happened. What this can prove
-    is that every item still missing a REVIEWED_BY appears in the checklist, so
-    nobody has to guess which rows are open.
-    """
+def test_review_table_records_completed_refusal_review():
+    """The signed review sheet and committed refusal rows cannot drift apart."""
     table = REVIEW_TABLE.read_text(encoding="utf-8")
-    pending = unreviewed_items(load_qa(QA_PATH))
-    assert pending, "the formal set is expected to await review until the group signs it"
-    for qid in pending:
-        assert qid in table, f"{qid} needs a signature but is not in the review table"
-    assert "REVIEWED_BY" in table
+    items = [item for item in load_qa(QA_PATH) if not item.is_answerable]
+    assert items
+    assert unreviewed_items(items) == []
+    for item in items:
+        assert item.qid in table, f"{item.qid} is signed but missing from the review table"
+    assert "Reviewer name(s) and date: ziqilin669, 2026-11-21" in table
+    assert "Remaining disagreements (adjudicated by a third member): none" in table
 
 
 # ---------------------------------------------------------------------------

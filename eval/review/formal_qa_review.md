@@ -35,8 +35,8 @@ Each item's `notes` in the csv says why it is a refusal (OUT-OF-DOMAIN or
 NEAR-MISS) and names the section a reader might mistake for an answer; start
 there, then search the page yourself rather than trusting the note.
 
-Machine check so far (`python -m eval.metrics validate --require-reviewed` fails
-until every row above is signed): the declared tokens are confirmed absent as
+Machine check (`python -m eval.metrics validate --require-reviewed`) passes now
+that every row above is signed. The declared tokens are confirmed absent as
 whole words, which is a necessary condition only. Absence of a phrase is not
 the same as absence of an answer.
 
@@ -82,5 +82,6 @@ does not support. Ambiguous items should be rewritten, not graded around.
 - Remaining disagreements (adjudicated by a third member): none
 
 Per `eval/judge_protocol.md` §1 the person who wrote an item may not be the only
-grader of that item; this sheet was drafted with coding-agent assistance and the
-questions have not been read by a second human yet, so every row above is pending.
+grader of that item. This sheet was drafted with coding-agent assistance;
+ziqilin669 recorded the independent review on 2026-11-21, and no row remains
+pending.

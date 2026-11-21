@@ -252,18 +252,19 @@ def test_development_destination_does_not_create_summary(tmp_path):
     assert not summary.exists()
 
 
-def test_formal_refuses_before_creating_summary(tmp_path):
+def test_formal_creates_summary_after_review_gate_opens(tmp_path):
     summary = tmp_path / "summary" / "chunking_comparison"
-    with pytest.raises(QASetError, match="not on frozen inputs"):
-        resolve_destination(
-            formal=True,
-            settings=load_settings(),
-            items=load_qa(),
-            summary_dir=summary,
-            raw_dir=tmp_path / "raw",
-        )
-    assert not summary.exists()
-    assert not (tmp_path / "raw").exists()
+    raw = tmp_path / "raw"
+    destination = resolve_destination(
+        formal=True,
+        settings=load_settings(),
+        items=load_qa(),
+        summary_dir=summary,
+        raw_dir=raw,
+    )
+    assert destination == summary
+    assert summary.is_dir()
+    assert not raw.exists()
 
 
 def test_summary_dir_without_formal_is_refused(tmp_path):
