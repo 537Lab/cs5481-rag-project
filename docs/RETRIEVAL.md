@@ -1,5 +1,10 @@
 # T3 检索层与向量库 / Retrieval and vector storage
 
+> **状态更新 / Update（2026-11-21 HKT，GitHub 状态核查）**：PR #14 的 Kubernetes v1.35 冻结语料已合入 `main`（12 个来源页面、16 个清洗文档），因此下方 2026-11-18 所说“尚无 I1 冻结文件”是**当时的历史状态**，不是当前阻塞。此文第 6–8 节的 4 文档／35QA 数据、示例 score、排名和旧快照哈希均仅对应 `CORPUS_V0` 开发实验，**不得标成冻结 Kubernetes 重跑结果**。PR #15 的正式 QA 及 KN01–KN10 人工复核尚未完成；本次同步尚**未**在新语料上实跑 diagnostics，新数据与输出哈希均待真实执行后补入。CI/pytest 不能代替 ONNX 实验，也不能代替学生本人复核。
+>
+> **复跑提示（尚未执行）**：先在冻结语料对应的 `main` 环境重建索引：`python -m ragkit.cli ingest`，然后根据当前真实 QA 版本分别选择开发或正式输入运行 `python -m eval.retrieval_diagnostics --qa eval/qa_set.csv --strategy fixed --top-k 3 --min-coverage 0.5 --output-dir eval/results/raw/t3-k8s-fixed-<run-id>`；每次使用新的输出目录，核对报告中的 `corpus_snapshot_sha256`、`qa_sha256`、collection 实际 count、retrieval 和 provenance checks。完成前不要宣称已重跑或通过正式评测。
+
+
 > **状态 / Status（2026-11-18，HKT）**：T3 的代码与开发期真实检索已实现；本文记录的是 **DEVELOPMENT / REAL_LOCAL**，不是正式评测。语料是 `CORPUS_V0` 的 4 篇文章，QA 是 T4 已合入的 35 题开发集。I1 正式冻结文件尚不存在；不能把这些观察写成正式实验结果。`offline-demo` 和确定性测试替身则是 **MOCK**，另行标识。
 >
 > **English summary:** T3 hardens Chroma collection isolation, cosine-score semantics, lossless chunk roundtrips and embedding validation. The reusable diagnostic CLI records actual local retrieval, deep gold-evidence ranks, integrity checks and descriptive score distributions. It defines no hit-rate, correctness or abstention metric. Formal evaluation and human review remain team responsibilities.

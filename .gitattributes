@@ -1,0 +1,21 @@
+# Line endings are part of the evaluated input, not a local preference.
+#
+# scripts/fetch_corpus.py records sha256 of the corpus bytes, and the frozen
+# manifest (interface I1) therefore commits one specific byte sequence. On
+# Windows the default core.autocrlf=true checkout rewrites those files to CRLF,
+# so the same commit passes the hash test on Linux and fails on Windows, and any
+# provenance hash computed from a working copy differs per platform. Pinning LF
+# keeps data/, the QA csv files and the results snapshots byte-identical
+# everywhere, which is what a frozen corpus has to mean.
+#
+# The QA csv files need it for a second reason: a gold quote may span two source
+# lines inside one quoted field, and metrics.load_qa opens the file with
+# newline="", so the field keeps whatever line ending the checkout produced while
+# the corpus is always read as LF. A CRLF working copy therefore fails verbatim
+# matching for those quotes on one platform only - see
+# tests/test_eval_metrics.py::test_committed_qa_files_stay_lf_so_multi_line_gold_survives_checkout.
+#
+# Everything tracked here is plain text; nothing needs a binary rule yet. If a
+# model, image or database file is ever committed, mark it `binary` so this rule
+# cannot touch its bytes.
+* text=auto eol=lf
