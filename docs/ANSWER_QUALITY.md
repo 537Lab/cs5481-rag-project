@@ -44,3 +44,16 @@ After additional malformed-input and provider-error tests, the generation and of
 Generation and offline pipeline tests passed 37 tests on 2026-11-20. This includes a subprocess MOCK batch command, per-gate diagnostics and publication-failure cleanup. Ruff passed. No real LLM was called.
 
 Final regression on 2026-11-20: `python -m pytest --ignore=tests/test_store.py -o addopts="" -q` reported 156 passed and 3 skipped. Full pytest was retried outside the sandbox and still crashed in Chroma Rust upsert (tests/test_store.py), establishing that moving outside the sandbox did not resolve it. `python -m demo.run`, `ruff check .` and `git diff --check` passed. A pyreadline destructor warning remained after pytest. No T3 files were modified.
+
+## T5 configuration provenance follow-up (2026-11-21)
+Batch exports now create an exclusive `<output-stem>.config.json` sidecar. Every I4 row points config_ref at this file. It records run ID, MOCK/REAL mode, chunking, top_k, score floor, embedding provider/model, LLM settings, QA file hash and manifest hash. MOCK configuration reflects the synthetic pipeline. Existing snapshots are protected and snapshots created by this invocation are removed if publication fails. QA and manifest hashes identify input bytes, but do not attest human review or corpus freezing. Source document content hashes and immutable index/model versions still require the team's formal experiment bundle. min_coverage belongs to T4 evaluation and is not a generation setting. No credentials or environment variables are serialized.
+
+Follow-up validation: 38 generation/offline pipeline tests passed and Ruff passed. Real LLM calls remain unexecuted. Earlier statements saying config_ref points to the mutable TOML are superseded by this change.
+
+## Additional output and CSV guards (2026-11-21)
+Citation-only output now refuses with missing_answer_text. Chinese sentence boundaries are checked even without spaces, and trailing citations after Chinese punctuation are attached to their preceding sentence. This remains a structural heuristic, not semantic grading. Batch CSV input now rejects missing required headers, duplicate header names and extra row values before model construction.
+
+Validation: 44 generation/offline pipeline tests passed; Ruff passed. Existing Windows pyreadline cleanup warning persists. No paid API calls were made.
+
+## PR #18 review fixes (2026-11-21)
+MOCK batch exports now build their provenance snapshot without loading the REAL configuration or reading its manifest. The MOCK snapshot records the synthetic pipeline's actual `min_score=0.0` instead of inheriting a value from `config.toml`. A regression test supplies a missing REAL manifest and a conflicting retrieval threshold, then verifies that the MOCK export still succeeds and records the fixture pipeline values. Validation after these fixes: 45 generation/offline pipeline tests passed, the suite excluding the known Windows Chroma store crash passed with 3 skips, and Ruff plus `git diff --check` passed. No paid API calls were made.
