@@ -749,7 +749,55 @@ hit@3 23/27 (0.8519)。`pytest`、`ruff` 和 `--help` 的屏幕输出没有留�
 
 ---
 
-## 10. 正式 Kubernetes 评测集的创建，与 PR #14 两处调整的复核（2026-11-20，T4 第二轮）
+## 10. T2 在冻结语料上重跑（2026-11-21，Cursor 编码 agent 执行，组员尚未重跑）
+
+分支 `t2-chunking-frozen-corpus`，从已合并 PR #14 的 `origin/main` 拉开。解释器是仓库 `.venv` 里的 Python 3.12.10。命令都在仓库根目录执行。没有调用 LLM。
+
+`--formal` 不再抱怨缺少 `frozen_manifest.json`。剩下的拒绝是 8 道 unanswerable 题没有 `REVIEWED_BY`。`eval/results/summary/chunking_comparison/` 这次之后仍然不存在。
+
+```
+$ python -m ruff check .
+All checks passed!
+
+$ python -m pytest -q
+154 passed, 2 skipped
+
+$ python -m eval.chunking_experiment --formal
+exit=2
+ERROR: --formal refused, this run is not on frozen inputs yet:
+  - unanswerable item(s) without a REVIEWED_BY attestation: N01, N02, N03, N04, N05, N06, N07, N08
+Development numbers belong in eval/results/raw/ via --out, not in summary/.
+
+$ python -m eval.chunking_experiment
+exit=0
+==============================================================================
+[DEVELOPMENT] chunking comparison — 开发用，非正式实验结果
+开发用 / development. Not a formal experiment result. Corpus cs5481-k8s-v135-16docs-36fd3eedf33f@bddfe3601885 is frozen. QA status: development set on CORPUS_V0, not the frozen formal QA set.
+==============================================================================
+corpus       : cs5481-k8s-v135-16docs-36fd3eedf33f@bddfe3601885 (frozen=True)
+qa set       : eval/qa_set.csv@c97051d8789c
+qa status    : development set on CORPUS_V0, not the frozen formal QA set
+held constant: size=600 overlap=80 top_k=3 min_coverage=0.5 embedding=local:all-MiniLM-L6-v2
+
+strategy      chunks    min    max     mean  hit@1          hit@3
+fixed            668    147    600 587.5793  16/27 (0.5926) 23/27 (0.8519)
+paragraph        775     81    683 515.7768  17/27 (0.6296) 23/27 (0.8519)
+
+disagreements: 5
+  A06 hit@3 gold=[1312, 1413] fixed=hit(rank=2), paragraph=miss(rank=None)
+  A08 hit@1 gold=[2260, 2388] fixed=miss(rank=3), paragraph=hit(rank=1)
+  A16 hit@1 gold=[1760, 1845] fixed=hit(rank=1), paragraph=miss(rank=2)
+  A17 hit@1 gold=[2905, 3040] fixed=miss(rank=None), paragraph=hit(rank=1)
+  A17 hit@3 gold=[2905, 3040] fixed=miss(rank=None), paragraph=hit(rank=1)
+
+not applicable: retrieval-only comparison. hit@k is retrieval_hit_rate(); it is not answer correctness
+wrote eval/results/raw/chunking_comparison/comparison.json
+```
+
+当前 JSON 的 `generated_at` 是 `2026-11-21T01:24:36+00:00`。同一天 `2026-11-21T01:22:54+00:00` 先跑过一轮，汇总表相同，说明文字还把语料写成未冻结的 `CORPUS_V0`。改过开发说明后重跑，后一次覆盖了 JSON。逐题文件在 gitignore 的 `eval/results/raw/chunking_comparison/comparison.json`，不入库。
+
+
+## 11. 正式 Kubernetes 评测集的创建，与 PR #14 两处调整的复核（2026-11-20，T4 第二轮）
 
 > 编号说明：本节原为第 9 节，与 main 上 T2 的第 9 节（分块对比）撞号；合并 `origin/main`
 > （`848d7c6`）后编号改为第 10 节，内部各小节号与交叉引用一并从 9.x 改为 10.x。
@@ -758,18 +806,18 @@ PR #14（分支 `t1-corpus-kubernetes-v135`，head `50e9985`）留了两条给 T
 「#14 对 `eval/qa_set.csv` 和 `tests/test_eval_metrics.py` 有少量调整，请 T4 负责人确认」，
 以及「目前 35 道 QA 仍是 Wikipedia 开发集，正式 Kubernetes QA 还需要 T4 创建并人工审核」。
 本轮完成前者的 review、以及后者的**创建**；**人工审核一步没有做，也做不了** ——
-`REVIEWED_BY` 是一个组员的名字，不能由 agent 代填（见 §10.7）。
+`REVIEWED_BY` 是一个组员的名字，不能由 agent 代填（见 §11.7）。
 
 分支 `t4-k8s-qa-set`，基点是**尚未合并**的 `pr/14`：正式题只能引用 I1 冻结快照里的那 12 篇
 Kubernetes 文档，而这些文档此刻只在 #14 里。环境与前两轮相同（Windows + `.venv`，
 Python 3.13.5，本地 ONNX embedding + 本地 Chroma，**零付费调用**）；下文命令一律写成仓库内
 可移植形式，实际由 `.venv\Scripts\*.exe` 在同一台机器上执行。
 
-### 10.1 PR #14 两处调整的复核结论
+### 11.1 PR #14 两处调整的复核结论
 
 | #14 的调整 | 本轮查到的真实原因 | 结论 |
 | --- | --- | --- |
-| `N07` 的 `ABSENT_TOKENS` 由 `charge; fee` 改成 `charge for reusing; licensing fee` | 旧检验是裸子串匹配：`fee` 命中的是语料里的 **`feedback`**，并不能证明「收费」这件事在语料中出现过 | **接受**。但根因在检验器不在题目，§10.2 已改成词边界匹配；以后组员不必再为了躲开偶然去改写措辞 |
+| `N07` 的 `ABSENT_TOKENS` 由 `charge; fee` 改成 `charge for reusing; licensing fee` | 旧检验是裸子串匹配：`fee` 命中的是语料里的 **`feedback`**，并不能证明「收费」这件事在语料中出现过 | **接受**。但根因在检验器不在题目，§11.2 已改成词边界匹配；以后组员不必再为了躲开偶然去改写措辞 |
 | 测试新增 `CORPUS_V0_DOC_IDS` 常量，并把「覆盖所有文档」改成「覆盖开发语料」 | 语料从 4 篇扩到 16 篇后，35 道 Wikipedia 开发题本来就不该覆盖 12 篇新文档 | **接受**。本轮进一步把「覆盖」变成两份文件各自的硬要求，并新增一条「两份合起来必须覆盖整个快照」的检查 |
 
 #14 在本机 worktree（`pr/14` 全量检出，验证完即删除）的真实结果：
@@ -790,7 +838,7 @@ FAILED tests/test_loaders.py::test_frozen_manifest_hashes_match_committed_docume
 1 failed, 132 passed, 2 skipped in 10.60s
 ```
 
-### 10.2 失败项定位：冻结语料的字节在 Windows 上被换行符改写（阻塞 #14，与 T4 代码无关）
+### 11.2 失败项定位：冻结语料的字节在 Windows 上被换行符改写（阻塞 #14，与 T4 代码无关）
 
 `tests/test_loaders.py` 用 `read_bytes()` 比较磁盘字节与 `frozen_manifest.json` 记录的 SHA-256，
 而 `scripts/fetch_corpus.py` 也是按字节记的哈希。逐篇比对（临时脚本，输出留在 gitignored 的
@@ -834,7 +882,7 @@ exit=2
 所以除了 `.gitattributes`，本轮还钉了两个测试：`test_committed_qa_files_stay_lf_so_multi_line_gold_survives_checkout`（检查两份已提交 CSV 的字节）与
 `test_a_crlf_copy_of_the_formal_set_stops_matching_the_corpus`（反向控制，证明上一条检查对应的失败真实存在）。
 
-### 10.3 `eval/metrics.py` 的三处改造
+### 11.3 `eval/metrics.py` 的三处改造
 
 1. **删掉 `QA_SET_STATUS` 常量**，改为 `qa_set_status(path, items)` **按内容推导**：文件名
    决定它是正式集还是开发集；`qa_corpus_binding()` 再决定这些 gold 是否只引用 I1 快照列出的
@@ -848,7 +896,7 @@ exit=2
    之外的文档」两类拒绝，拒绝信息里给出待签名清单的路径；`cmd_validate` 多打三行：语料绑定、
    快照中尚无 answerable 题的文档、复核表位置。
 
-### 10.4 两份 QA 文件
+### 11.4 两份 QA 文件
 
 35 题保留为开发集，**内容未改一行**，只换了文件名（`git mv` 保留历史）；I2 唯一的
 `eval/qa_set.csv` 路径现在放的是正式 Kubernetes 集，所以默认参数下 T2/T3/T5 拿到的就是正式集。
@@ -890,7 +938,7 @@ formal evaluation set; 8 refusal label(s) awaiting a human REVIEWED_BY
 一开始想用的 `design document`、`implemented in`、`mysql`、`cannot exceed`、`borg` 几个 token
 全部被机检拦下（它们在快照里真的出现），已换词；最终 23 个 token 全部确认不存在。
 
-### 10.5 验收命令（真实执行）
+### 11.5 验收命令（真实执行）
 
 ```
 $ ruff check .
@@ -935,7 +983,7 @@ exit=0
 `pyproject.toml` 的 `addopts` 已含 `-q`，重复传无副作用，保留是为了跟 RUNLOG 历史记录可对比。
 2 个 skipped 仍是 `tests/test_e2e_real.py`（需 `RUN_REAL_E2E=1`，其中一个还需 `OPENAI_API_KEY`），本轮未开启。
 
-### 10.6 REAL 检索命中率（正式集与开发集，同一个索引）
+### 11.6 REAL 检索命中率（正式集与开发集，同一个索引）
 
 真实入库 16 篇 → 668 chunks（`fixed` size=600 overlap=80，本地 ONNX MiniLM dim=384，`top_k=3`，
 `min_coverage=0.5`），未动 `config.toml`，零付费调用：
@@ -974,7 +1022,7 @@ hit@3 从 0.8519 降到 0.6923**。这不是「代码坏了」的巧合，而是
 另：这两个文件只落在 gitignored 的 `eval/results/raw/`，没进 `summary/`：拒答标注未复核，
 `--formal` 会被拒，这是当前应有的状态。
 
-### 10.7 hit@3 未命中的 8 题归因（切片问题还是排序问题）
+### 11.7 hit@3 未命中的 8 题归因（切片问题还是排序问题）
 
 因为命中率明显偏低，本轮逐条检查了未命中题的 gold 区间是否**可能被任何 chunk 命中**：用与入库相同的
 `fixed 600/80` 本地重切，取该文档内覆盖该区间比例最高的 chunk：
@@ -997,7 +1045,7 @@ T2 的 chunking 对比可以拿「不存在因切片而不可命中的题」作�
 K25 的 gold 是教程首句（`stateless_deployment` 第 1 行），top-3 全是 `pods`/`probes` 的首块 —— 问题里
 的“tutorial”在索引中没有任何可区分的信号，这是领域文档本身的特点，不是引文写错了。
 
-### 10.8 本轮明确未执行 / 未做
+### 11.8 本轮明确未执行 / 未做
 
 - **人工审核（#14 里要的第二件事）没做，也不是本轮能做的**：`eval/qa_set.csv` 的 10 条拒答标注全部
   没有 `REVIEWED_BY`。已备好待签名的工作单 `eval/review/formal_qa_review.md`（逐题列出要重读的页面、
@@ -1006,12 +1054,12 @@ K25 的 gold 是教程首句（`stateless_deployment` 第 1 行），top-3 全�
   拒答标注未复核这一条就足以拦住它；代码路径由测试用临时目录覆盖。
 - `score` 对 REAL 答案产物的打分：仍未执行（需要 T5 的真 `eval/answers/<run_id>.jsonl`）；
   `answer_correctness` 依旧无数字（`pending human grading`）。
-- `paragraph` 策略的命中率：本轮未测（本机 collection 只有 `chunks_fixed`）；第 10.6 节两个率都是
+- `paragraph` 策略的命中率：本轮未测（本机 collection 只有 `chunks_fixed`）；第 11.6 节两个率都是
   `fixed 600/80`，不能代表全项目。
 - 36 道题的人工逐题阅读：本轮只做了机检（逐字、唯一性、跨行覆盖、领域内部、token 不存在）与写作
-  自查（§10.4）。机检只能证明引文存在，不能证明题目清楚。
+  自查（§11.4）。机检只能证明引文存在，不能证明题目清楚。
 
-### 10.9 本 PR 的云端 CI：未执行（账号级 Actions 计费），不是代码失败
+### 11.9 本 PR 的云端 CI：未执行（账号级 Actions 计费），不是代码失败
 
 PR 建好后 `ci / check (pull_request)` 在 2 秒内红。run 页 Annotation 原文：
 
@@ -1037,7 +1085,7 @@ exit=0
 ```
 
 该 worktree 里 `test_committed_qa_files_stay_lf_so_multi_line_gold_survives_checkout` 通过，
-反证检出确实是 LF（同一个用例在我归一化之前的主工作副本上因 CRLF 红过，见 §10.2）。
+反证检出确实是 LF（同一个用例在我归一化之前的主工作副本上因 CRLF 红过，见 §11.2）。
 其余三条排除依据：`git ls-files --others --exclude-standard` 为空（没有测试依赖「只在本机存在」的文件）；
 `git diff origin/main HEAD -- .github/workflows/ requirements-dev.txt pyproject.toml` 为空（CI 定义与依赖未变）；
 main 是本分支祖先（`4f865c1`）且 `git merge-tree --write-tree origin/main HEAD` 无冲突（CI 检出的树 = HEAD）。
@@ -1048,9 +1096,9 @@ main 是本分支祖先（`4f865c1`）且 `git merge-tree --write-tree origin/ma
 `CONTRIBUTING.md`。
 
 **后续（2026-11-21）**：本节记录的那个状态已过去 —— 本 PR 页面现在显示 **1 successful check**，
-账号级计费故障已恢复。上一段保留作为当时的事实记录，不回头修改；当前 CI 口径见 §10.10。
+账号级计费故障已恢复。上一段保留作为当时的事实记录，不回头修改；当前 CI 口径见 §11.10。
 
-### 10.10 合并 `origin/main`（`848d7c6`）：两个「第 9 节」撞号，以及合并后的实跑（2026-11-21）
+### 11.10 合并 `origin/main`（`848d7c6`）：两个「第 9 节」撞号，以及合并后的实跑（2026-11-21）
 
 main 在这期间合并了 T1 的 #13（`0ea607d`，loader 加固）与 T2 的 #10（`848d7c6`，分块对比）。
 `git merge origin/main` 后：**代码层全部自动合并**（`ragkit/loaders.py`、`ragkit/chunking.py`、
@@ -1081,7 +1129,7 @@ exit=0                                # 正式集：36 条，绑定 12 篇，fro
 $ python -m eval.metrics validate --qa eval/qa_set_dev_v0.csv
 exit=0                                # 开发集：35 条，4 篇 CORPUS_V0
 $ python -m eval.metrics validate --require-reviewed
-exit=2                                # 10 条 REVIEWED_BY 未签，与 §10.8 一致
+exit=2                                # 10 条 REVIEWED_BY 未签，与 §11.8 一致
 ```
 
 用例数增加来自 main：`tests/test_chunking.py` 10 → 23 个 `def test_`、`tests/test_loaders.py`
@@ -1102,7 +1150,7 @@ exit=2
 给 T2 的一句话：`--formal` 不需要改代码，等 `REVIEWED_BY` 签完就能跑；T2 的 `DEVELOPMENT_NOTE`
 里「the current qa_set.csv … not frozen formal inputs」这句已与本仓库现状不符（只报告，本轮没改 T2 的文件）。
 
-### 10.11 PR 编号与组员账号：一条被浏览器现场证伪的推断（2026-11-21）
+### 11.11 PR 编号与组员账号：一条被浏览器现场证伪的推断（2026-11-21）
 
 本轮试图用浏览器把新的 PR 描述贴上去，会话未登录，按预设的停止条件退出（没有输入任何凭据）。
 但这次探测从 PR 列表页拿到了三条仓库内无法得到的事实，其中**推翻了我昨天写进 `docs/DEV_LOG.md` 的一句话**：
@@ -1120,7 +1168,7 @@ exit=2
 顺带一条对 reviewer 有用的：#15 页面上显示的是 **8 commits / +9,748 −250 / 29 files**，其中包含
 尚未合并的 #14 全部内容（base = `main` 的必然结果，不是本 PR 多写了代码）。
 
-### 10.12 第二次合并 `origin/main`（`0ee7d5e`）+ 把拒答题核对转交组员（2026-11-21）
+### 11.12 第二次合并 `origin/main`（`0ee7d5e`）+ 把拒答题核对转交组员（2026-11-21）
 
 这一轮做了三件不同的事，逐件登记，因为它们的可信度来源不一样。
 
@@ -1182,10 +1230,10 @@ KN01–KN10 的空白判定表（只允许填「同意 / 不同意 / 该改」�
 **留给 T5 的一处排版（我没改，因为不是我写的行）**：main 上 `## T5 additional records` 的两行表格缺少
 `| --- |` 表头分隔行，GitHub 不会把它渲染成表格，只会显示成竖线原文。属于 #16 的内容，按所有权应由 T5 自己修。
 
-### 10.13 人工复核由 `ziqilin669` 本人落笔，正式门禁第一次打开（2026-11-21）
+### 11.13 人工复核由 `ziqilin669` 本人落笔，正式门禁第一次打开（2026-11-21）
 
-本节写于 §10.12 之后。期间**有三个不是我推的提交落进本分支**，远端 head 从 `11470fb` 变成 `d39d658`；
-本地在它们存在期间一直停在 `11470fb`，所以 §10.12 那句「`REVIEWED_BY` 仍 0/10」在写完后就已过期（见 §10.14）。
+本节写于 §11.12 之后。期间**有三个不是我推的提交落进本分支**，远端 head 从 `11470fb` 变成 `d39d658`；
+本地在它们存在期间一直停在 `11470fb`，所以 §11.12 那句「`REVIEWED_BY` 仍 0/10」在写完后就已过期（见 §11.14）。
 
 | 提交 | 账号 / 时间（GMT+8） | 内容 | 我的核验 |
 | --- | --- | --- | --- |
@@ -1224,9 +1272,9 @@ second human yet, so every row above is pending」改成「no row remains pendin
 不再会拒绝，硬留这条测试反而要造假数据），机制层覆盖仍留在 `test_eval_metrics.py`。但这次改动是
 **T1 的账号、在 T4 的分支上、改 T2 拥有的测试文件**，三方里没有一个文件所有者，是否认可这种翻转应由 T2 自己说。
 
-### 10.14 我上一轮的登记有一条已经过期，以及本轮确认下来的合并口径
+### 11.14 我上一轮的登记有一条已经过期，以及本轮确认下来的合并口径
 
-**自我更正（不改动 §10.12 原文，只在此追加）**：§10.12 结尾的「本轮没有任何一条 `REVIEWED_BY` 被写入」，
+**自我更正（不改动 §11.12 原文，只在此追加）**：§11.12 结尾的「本轮没有任何一条 `REVIEWED_BY` 被写入」，
 以及我在 PR #15 描述与 `issuecomment-7062218447` 里写的「`REVIEWED_BY` 出现 0 次」「`--require-reviewed`
 必然 `exit=2`」，**在发出的那一刻就已经不成立**：`da3c82d` 的签名上传是 18:52 GMT+8（10:52 UTC），
 我的评论发在 11:56 UTC、描述更新在 12:24 UTC。当时那些话对本分支 `11470fb` 是对的，对 PR 的真实 head 是错的。
@@ -1243,7 +1291,68 @@ second human yet, so every row above is pending」改成「no row remains pendin
 也就是说本分支会暂时继承一份已知坏文档，但我不在自己的 PR 里删别人写的 98 行。
 
 **新的撞号事实**：main 的 `## 10` 现在是「T2 在冻结语料上重跑」，本分支的 `## 10` 是「T4 正式 Kubernetes 评测集」，
-同号两份内容。合并时按 §10.10 的同一做法：**T4 这一节整体改号为 `## 11`**（含 `### 10.x` 小节号与全部 `§10.x`
+同号两份内容。合并时按 §11.10 的同一做法：**T4 这一节整体改号为 `## 11`**（含 `### 11.x` 小节号与全部 `§11.x`
 自引用同步），T2 的第 10 节原文一字不动。`RUNLOG.md` 与 `docs/DEV_LOG.md` 的 main 侧仍是纯追加
 （`0ee7d5e → main` 各 `+47 / −0`、`+1 / −0`），可以安全解；与我的行零重叠这个判据本轮重新测过，仍成立。
+
+### 11.15 第三次合并 `origin/main`（`30e6e98`）：6 处文档冲突、本节改号为第 11 节（2026-11-21）
+
+上面 §11.14 写的合并口径在这一轮落地。前置事实（`git fetch` 后实测，不是回忆）：merge-base 仍是
+`0ee7d5e`，main 已到 `30e6e98`（合入 #18、#20），main 侧 14 个提交不在本分支，本分支 12 个提交不在 main；
+`git merge-tree --write-tree HEAD origin/main` **`exit=1`**，冲突**只在三份追加式审计文档**：
+`RUNLOG.md` 1 处、`docs/DEV_LOG.md` 1 处、`docs/AI_USAGE.md` 4 处，共 6 处；代码与测试 0 处冲突，
+`ragkit/cli.py`、`ragkit/generation.py`、`tests/test_generation.py`、`demo/README.md`、
+`docs/ANSWER_QUALITY.md`、`docs/CHUNKING_EXPERIMENT.md`、`eval/chunking_experiment.py`、
+`tests/test_chunking.py` 全部由 git 自动合并。
+
+**（1）`RUNLOG.md`：main 的那一节在前，本分支的那一节整体改号。**
+main 上 `## 10. T2 在冻结语料上重跑` 共 46 行，**逐字放在本节之前，一个字未改**；本分支原来那份
+`## 10. 正式 Kubernetes 评测集…`（497 行）整体改号为 `## 11`，`### 10.1`–`### 10.14` 改为
+`### 11.1`–`### 11.14`，节内指向本节自己的指针（`§10.x`、`第 10.x 节`、`` `RUNLOG.md` 第 10 节``）
+同步改为 11.x。**三句叙述上一次（9→10）改号的原句故意保留**：「后编号改为第 10 节」、
+「T4 一节整体改编号为**第 10 节**」、「属于 T4 的引用改为第 10 节」——它们记录的是当时发生的事件，
+改掉就是篡改历史；读者现在的定位信息由本节承担。
+
+**（2）`docs/DEV_LOG.md`：只插入别人的一行，不重排别人的行。**
+main 侧新增的是 `| 2026-11-21 09:24 GMT+8 | T2 在 PR #14 冻结语料上重跑 |` 这一行（`0ee7d5e → main`
+为 `+1 / −0`，纯追加），逐字插在本分支四行 T4 记录之前。改号脚本只作用于本分支的行 ——
+**T2 写的指针若指向 T2 自己的第 10 节，我没有权限替它改成第 11 节**。
+
+**（3）`docs/AI_USAGE.md`：按 §11.14 的口径，继承坏文档，只追加自己的行。**
+main 那 195 行**逐字作为文件前缀保留**，包括那份已知缺陷：一级标题同时出现在第 1 与第 96 行
+（`0ee7d5e → main` 仍是 `+195 / −98`，纯追加应为 `−0`）。本分支自己的 4 行 T4 登记与更正后的现状段落
+追加到新开的 `## T4 additional records` 一节，带 `| --- |` 分隔行，GitHub 能正常渲染。
+上一轮那种「本分支全文保留 + 把 main 的新块附到末尾」的解法这一轮不再适用：main 侧那 98 行改动
+与本分支的 98 行改动**交集就是 98 行**（双方都把带 CR 的 base 整份归一并各自重写），没有任何一段能
+干净地插在对方中间。main 的标题句「除 T4 外组员尚未开始」与本分支的标题句互相矛盾，本轮**取 main 的
+原文不改**，由 T4 一节里的一段说明取代其口径 —— 别人的行留在原地，错的判断由追加的行来更正。
+
+**（4）解完之后的机器校验**（脚本 `.tmp/verify_pass1.py`，**37 项断言全通过**；与仓库一样是一次性取证，不入库）：
+main 的 T2 段逐字连续存在；main 的 195 行是 `docs/AI_USAGE.md` 的逐字前缀；本分支 4 行 T4 记录与现状
+段落都在；`### 10.x` 残留 0 处、`§10.` 指针残留 0 处；剩下的「第 10 节」全部命中上面列出的三句叙述与
+「T2 的第 10 节原文一字不动」；无冲突标记；三份文件全 LF 且以换行结尾。
+
+**（5）合并后实跑**（`.venv`，Python 3.13.5，全部真实退出码）：
+
+| 命令 | 结果 |
+| --- | --- |
+| `ruff check .` | All checks passed（`exit=0`） |
+| `python -m pytest -o addopts="" -q` | **195 passed / 2 skipped**（合并前 186；+9 例来自 main 的 #18 / #20） |
+| `python -m eval.metrics validate` | `exit=0`；`10/10 carry REVIEWED_BY`；corpus binding verified `True` |
+| `python -m eval.metrics validate --require-reviewed` | `exit=0`（门禁打开的状态跨过这次合并仍然成立） |
+
+**（6）一条不能替别人判定的一致性风险**：`tests/test_chunking.py` 现在同时含有 main 上 T2 自己的改动和
+`d39d658` 里 **T1 账号在 T4 分支上**做的门禁翻转。git 文本层面自动合并成功、195 例全绿，但这两套改动叠加后
+的语义是否仍是 T2 想要的，**只有 T2 能认**（§11.13 已把这件事挂在他名下）。测试通过不等于认可。
+
+**（7）推送前的干净检出复现，以及第一次复现给出的假红灯**：`git worktree add --detach` 检出一份当前 HEAD，
+里面没有任何未跟踪文件。第一次复现给出 `ruff check .` **`exit=1` 且 stdout 为空**、`pytest` **190 passed /
+3 skipped**，与主工作树不一致，当时我把它当成待解释的阻塞项。取 stderr 之后确认这是**解释器选错**，与内容无关：
+那条命令走的是 PATH 上的 conda 解释器（pytest **9.1.1**，且 `No module named ruff` —— 这句话在 stderr，
+只读 stdout 就像一次无声失败）。换回仓库 `.venv`（pytest **8.4.2**，符合 `requirements-dev.txt` 的
+`pytest>=8,<9`，也正是 CI `pip install -r requirements-dev.txt` 会装出来的那一档）在同一份检出里重跑，
+结果与主工作树完全一致：`ruff check .` `exit=0`、**195 passed / 2 skipped**、两条 `validate` 均 `exit=0`。
+教训两条：本机测量必须先固定解释器路径；`exit=1` 而 stdout 为空时第一步是读 stderr，不是改代码。
+
+本轮登记自身会产生新的 head，它的云端结论只应在新 head 的 Checks 页面上读，不在此自指追记。
 

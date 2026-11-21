@@ -161,8 +161,8 @@ def verify_citations(answer: Answer, retrieved: Sequence[RetrievedChunk]) -> boo
 def claim_coverage_problems(text: str) -> list[str]:
     """Conservative sentence/list coverage heuristic, without semantic judgement."""
     # Keep a citation following sentence punctuation attached to that sentence.
-    normalized = re.sub(r"([.!?])\s+(\[[^\]]+\])", r" \2\1", text)
-    units = re.split(r"(?<=[.!?。！？])\s+|\n+|；|;", normalized)
+    normalized = re.sub(r"([.!?。！？])\s*((?:\[[^\]]+\]\s*)+)", r" \2\1", text)
+    units = re.split(r"(?<=[.!?])\s+|(?<=[。！？])|\n+|；|;", normalized)
     return [unit.strip() for unit in units
             if re.search(r"\w", re.sub(CITATION_PATTERN, "", unit))
             and not re.search(CITATION_PATTERN, unit)]
@@ -182,6 +182,8 @@ def refusal_reason(raw: object, retrieved: Sequence[RetrievedChunk]) -> str | No
         return "unknown_citation_id"
     if not ids:
         return "missing_citations"
+    if not re.search(r"\w", re.sub(CITATION_PATTERN, "", raw)):
+        return "missing_answer_text"
     if claim_coverage_problems(raw):
         return "uncovered_claim"
     if any(not available[cid].text.strip() for cid in ids):
