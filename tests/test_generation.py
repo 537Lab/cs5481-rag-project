@@ -336,3 +336,35 @@ def test_mock_export_configuration_snapshot(tmp_path):
     assert config['top_k'] == 10
     assert config['qa_sha256'] == hashlib.sha256(Path(args.questions).read_bytes()).hexdigest()
     assert config['corpus_ref'] == 'tests/fixtures/manifest.json'
+
+@pytest.mark.parametrize('response', [
+    '[doc_a#0000]',
+    '第一句没有引用。第二句有引用[doc_a#0000]。',
+])
+def test_citation_only_and_uncovered_chinese_sentence_refuse(response):
+    generator, _ = _generator(response)
+    assert generator.generate('q', _hits()).abstained
+
+
+def test_chinese_claims_with_individual_citations_pass():
+    generator, _ = _generator('第一句[doc_a#0000]。第二句[doc_a#0001]。')
+    assert not generator.generate('q', _hits()).abstained
+
+
+@pytest.mark.parametrize('content', [
+    'qid,question,question\nx,q,q\n',
+    'qid,question\nx,q,unexpected\n',
+    'qid,prompt\nx,q\n',
+])
+def test_invalid_csv_shape_before_generation(tmp_path, content):
+    import argparse
+
+    from ragkit.cli import cmd_batch
+
+    source = tmp_path / 'bad.csv'
+    source.write_text(content, encoding='utf-8')
+    args = argparse.Namespace(questions=str(source), output=str(tmp_path / 'out.jsonl'),
+                              run_id='MOCK-bad', config=None, mock=True)
+    with pytest.raises(ValueError, match='CSV'):
+        cmd_batch(args)
+    assert not (tmp_path / 'out.jsonl').exists()
