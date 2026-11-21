@@ -61,10 +61,6 @@ from ragkit.loaders import load_documents
 STRATEGIES = ("fixed", "paragraph")
 COMPARISON_DIR = "chunking_comparison"
 DEVELOPMENT_LABEL = "DEVELOPMENT"
-DEVELOPMENT_NOTE = (
-    "开发用 / development. Not a formal experiment result. "
-    "Numbers describe CORPUS_V0 and the current qa_set.csv, which are not frozen formal inputs."
-)
 FORMAL_SUMMARY = SUMMARY_DIR / COMPARISON_DIR
 
 
@@ -253,6 +249,16 @@ def _relative(path: str | Path) -> str:
         return str(path)
 
 
+def development_note(shared: dict[str, object]) -> str:
+    """Say which snapshot this development run used. Do not call it formal."""
+    frozen = "frozen" if shared.get("corpus_frozen") else "not frozen"
+    return (
+        "开发用 / development. Not a formal experiment result. "
+        f"Corpus {shared.get('corpus_ref')} is {frozen}. "
+        f"QA status: {shared.get('qa_set_status')}."
+    )
+
+
 def build_payload(
     comparison: dict[str, object],
     configs_by_strategy: dict[str, dict[str, object]],
@@ -287,7 +293,7 @@ def build_payload(
         "label": "FORMAL" if formal else DEVELOPMENT_LABEL,
         "mode": "chunking_comparison",
         "formal": formal,
-        "note": None if formal else DEVELOPMENT_NOTE,
+        "note": None if formal else development_note(shared),
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "command": command,
         "shared": shared,

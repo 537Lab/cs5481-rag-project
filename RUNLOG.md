@@ -745,3 +745,50 @@ exit=0
 hit@1 16/27 (0.5926)，hit@3 23/27 (0.8519)；`paragraph` 33 chunks，hit@1 17/27 (0.6296)，
 hit@3 23/27 (0.8519)。`pytest`、`ruff` 和 `--help` 的屏幕输出没有留在终端记录里，这里不补写它们的通过行数。
 
+## 10. T2 在冻结语料上重跑（2026-11-21，Cursor 编码 agent 执行，组员尚未重跑）
+
+分支 `t2-chunking-frozen-corpus`，从已合并 PR #14 的 `origin/main` 拉开。解释器是仓库 `.venv` 里的 Python 3.12.10。命令都在仓库根目录执行。没有调用 LLM。
+
+`--formal` 不再抱怨缺少 `frozen_manifest.json`。剩下的拒绝是 8 道 unanswerable 题没有 `REVIEWED_BY`。`eval/results/summary/chunking_comparison/` 这次之后仍然不存在。
+
+```
+$ python -m ruff check .
+All checks passed!
+
+$ python -m pytest -q
+154 passed, 2 skipped
+
+$ python -m eval.chunking_experiment --formal
+exit=2
+ERROR: --formal refused, this run is not on frozen inputs yet:
+  - unanswerable item(s) without a REVIEWED_BY attestation: N01, N02, N03, N04, N05, N06, N07, N08
+Development numbers belong in eval/results/raw/ via --out, not in summary/.
+
+$ python -m eval.chunking_experiment
+exit=0
+==============================================================================
+[DEVELOPMENT] chunking comparison — 开发用，非正式实验结果
+开发用 / development. Not a formal experiment result. Corpus cs5481-k8s-v135-16docs-36fd3eedf33f@bddfe3601885 is frozen. QA status: development set on CORPUS_V0, not the frozen formal QA set.
+==============================================================================
+corpus       : cs5481-k8s-v135-16docs-36fd3eedf33f@bddfe3601885 (frozen=True)
+qa set       : eval/qa_set.csv@c97051d8789c
+qa status    : development set on CORPUS_V0, not the frozen formal QA set
+held constant: size=600 overlap=80 top_k=3 min_coverage=0.5 embedding=local:all-MiniLM-L6-v2
+
+strategy      chunks    min    max     mean  hit@1          hit@3
+fixed            668    147    600 587.5793  16/27 (0.5926) 23/27 (0.8519)
+paragraph        775     81    683 515.7768  17/27 (0.6296) 23/27 (0.8519)
+
+disagreements: 5
+  A06 hit@3 gold=[1312, 1413] fixed=hit(rank=2), paragraph=miss(rank=None)
+  A08 hit@1 gold=[2260, 2388] fixed=miss(rank=3), paragraph=hit(rank=1)
+  A16 hit@1 gold=[1760, 1845] fixed=hit(rank=1), paragraph=miss(rank=2)
+  A17 hit@1 gold=[2905, 3040] fixed=miss(rank=None), paragraph=hit(rank=1)
+  A17 hit@3 gold=[2905, 3040] fixed=miss(rank=None), paragraph=hit(rank=1)
+
+not applicable: retrieval-only comparison. hit@k is retrieval_hit_rate(); it is not answer correctness
+wrote eval/results/raw/chunking_comparison/comparison.json
+```
+
+当前 JSON 的 `generated_at` 是 `2026-11-21T01:24:36+00:00`。同一天 `2026-11-21T01:22:54+00:00` 先跑过一轮，汇总表相同，说明文字还把语料写成未冻结的 `CORPUS_V0`。改过开发说明后重跑，后一次覆盖了 JSON。逐题文件在 gitignore 的 `eval/results/raw/chunking_comparison/comparison.json`，不入库。
+
