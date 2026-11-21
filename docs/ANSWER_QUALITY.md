@@ -1,5 +1,20 @@
 # T5 Answer Quality
 
+## Qualitative failure examples for the demo
+
+These are synthetic illustrations of the existing rules, not measured failure
+frequencies or human grading records. See `demo/README.md` for the presentation.
+
+| Case | Generator behavior | Interpretation |
+| --- | --- | --- |
+| Answer cites a chunk absent from this retrieval turn | Abstains with `unknown_citation_id` | Prevents invented IDs, but cannot recover missing evidence. |
+| One sentence has a valid citation; the next has none | Abstains with `uncovered_claim` | Conservative coverage can also reject an uncited heading or harmless formatting. |
+| Source says port 8080; answer says port 9090 with that source's real ID | May pass structural checks | Verbatim excerpts and valid IDs cannot detect contradiction. T4 must grade support independently. |
+| Model returns `NO_ANSWER` although retrieved evidence contains the answer | Abstains with `model_reported_insufficient_evidence` | Potential over-refusal; appropriateness requires the frozen QA and evidence, not this reason code alone. |
+| Supporting text occurs after the first 200 characters of a chunk | Exported excerpt may omit that evidence | The citation quote is a prefix, not a model-selected supporting span; inspect the full retrieved source for semantic grading. |
+
+No failure rate or answer correctness is inferred from these examples.
+
 ## T5 Overview
 T5 extends generation and CLI functionality on main commit 848d7c6. No paid API was called.
 
