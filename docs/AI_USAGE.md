@@ -56,7 +56,30 @@
 
 | 日期 | 任务包 | AI / Agent 名称 | 具体用途（生成什么、改哪些文件） | 我亲自复核了什么 | 我亲自跑了哪些命令 | 云端 CI 结果 | PR 号 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-11-17 | T1 | OpenAI Codex（编码 agent） | 辅助认领 Issue #1；修改 `ragkit/loaders.py`，增加 UTF-8、必填出处/许可、重复路径与重复内容校验；扩充 `tests/test_loaders.py` 边界测试；未采集或改动正式语料 | **尚未由负责人逐项人工复核**；需在 PR review 时阅读实现并确认能解释失败策略与 MOCK 例外 | 无；以下命令均由 Codex 在本机执行：`pytest tests/test_loaders.py -q`、`pytest -q`、`ruff check .`、`ragkit.cli offline-demo` | 待本 PR 的 `ci / check` | 分支 `t1-corpus-loader-hardening` |
+| 2026-11-17 | T1 | OpenAI Codex（编码 agent） | 辅助认领 Issue #1；修改 `ragkit/loaders.py`，增加 UTF-8、必填出处/许可、重复路径与重复内容校验；扩充 `tests/test_loaders.py` 边界测试；未采集或改动正式语料 | **尚未由负责人逐项人工复核**；需在 PR review 时阅读实现并确认能解释失败策略与 MOCK 例外 | 无；以下命令均由 Codex 在本机执行：`pytest tests/test_loaders.py -q`、`pytest -q`、`ruff check .`、`ragkit.cli offline-demo` | `ci / check` 已通过 | PR #13 |
+
+## 组员追加记录（T1，正式语料快照）
+
+| 日期 | 任务包 | AI / Agent 名称 | 具体用途（生成什么、改哪些文件） | 我亲自复核了什么 | 我亲自跑了哪些命令 | 云端 CI 结果 | PR 号 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-11-19 | T1 | OpenAI Codex（编码 agent） | 按全组确认的 Kubernetes v1.35 方向核验 CC BY 4.0 许可与 12 个固定来源；改写采集脚本；生成正式语料、`manifest.json`、`frozen_manifest.json`、来源表与统计文档；定位并最小修正 T4 开发 QA 的两处集成冲突 | **尚未由负责人逐项人工复核**；需在 PR review 时抽查固定来源、清洗前后正文、SHA-256 和 T4 兼容修正 | 无；以下均由 Codex 在本机执行：两次 `fetch_corpus.py` 与全量哈希比较、`pytest`、`ruff check .`、真实 `cli ingest`（16 文档 → 651 chunks）、真实 `cli retrieve` | 待本 PR 的 `ci / check` | 分支 `t1-corpus-kubernetes-v135` |
+
+### T1 清洗遗漏修订（2026-11-19，PR #12）
+
+Codex 对照固定来源确认旧清洗器遗漏了 2 处共享 prerequisites、15 处 YAML
+code_sample，以及 8 处 currentVersion 占位符。修订后从同一 commit 内联依赖，
+保留版本值、图片说明及 API 标签；未展开的 include/code_sample 会报错。
+本地 Agent 验证：132 passed / 2 skipped，Ruff 通过，重复采集逐文件字节一致；
+真实入库 16 篇 → 668 chunks。新快照为 `cs5481-k8s-v135-16docs-36fd3eedf33f`，
+替代 PR 初版快照；旧字符偏移及 chunk 编号需重新生成。人工复核与云端 CI 尚待确认。
+
+### T1 来源追踪与交接准备（2026-11-19，PR #12）
+
+Codex 为 28 个固定上游文件记录 URL 与 SHA-256（12 个页面、1 个共享 include、
+15 个 YAML 示例），补充来源署名和 T2–T5 交接说明；下载遇到临时 TLS 故障后，
+加入最多三次重试。正文、doc_id 和 corpus_id 未变。本地检查两种基础分块策略：
+fixed 668 chunks、paragraph 775 chunks，全部偏移逐字匹配、出处及许可一致，
+覆盖全部非空白正文。该检查不属于正式检索质量对比实验。人工复核仍待完成。
 
 ## 写报告时建议披露的句子（示例，必须按实际情况改写）
 
@@ -69,6 +92,7 @@
 T2 的 hit@k 仍是开发集上的检索，不是冻结语料上的正式实验；回答正确率至今为 0。
 贡献比例页须在全员开工后据实填写。
 
-| 2026-11-20 | T5 | Codex | Added heuristic citation coverage, invalid-output refusal, batch I4 export, offline demo and tests on branch t5-generation-validation. Agent ran the checks documented in ANSWER_QUALITY.md. | User review and personal rerun Pending. No human review signatures or formal metrics supplied. |
+## T5 additional records
 
+| 2026-11-20 | T5 | Codex | Added heuristic citation coverage, invalid-output refusal, batch I4 export, offline demo and tests on branch t5-generation-validation. Agent ran the checks documented in ANSWER_QUALITY.md. | User review and personal rerun Pending. No human review signatures or formal metrics supplied. |
 | 2026-11-20 | T5 follow-up | Codex | Added shared refusal diagnostics, MOCK batch subprocess coverage and atomic-publication failure cleanup tests, updated demo instructions. | Agent executed 37 T5/offline tests and 156 passing tests with test_store.py excluded (3 skipped). Full suite still crashes in Chroma outside sandbox. Human code review and personal rerun Pending. |
