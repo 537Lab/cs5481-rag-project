@@ -217,25 +217,12 @@ def cmd_batch(args: argparse.Namespace) -> int:
         raise ValueError("output already exists; choose a new run path")
     if snapshot_path.exists():
         raise ValueError("configuration snapshot already exists; choose a new run path")
-    settings = load_settings(args.config)
     mock = getattr(args, "mock", False)
     snapshot = {
         "run_id": args.run_id,
         "mode": "MOCK" if mock else "REAL",
-        "strategy": settings.chunk_strategy,
-        "size": settings.chunk_size,
-        "overlap": settings.chunk_overlap,
-        "top_k": settings.top_k,
-        "min_score": settings.min_score,
-        "embedding": {"provider": settings.embedding_provider,
-                      "model": settings.local_model if settings.embedding_provider == "local"
-                      else settings.api_model},
-        "llm": {"model": settings.llm_model, "temperature": settings.temperature,
-                "max_tokens": settings.max_tokens},
         "qa_set_ref": str(Path(args.questions)),
         "qa_sha256": hashlib.sha256(Path(args.questions).read_bytes()).hexdigest(),
-        "corpus_ref": str(settings.manifest),
-        "manifest_sha256": hashlib.sha256(settings.manifest.read_bytes()).hexdigest(),
     }
     if mock:
         if not args.run_id.startswith("MOCK-"):
@@ -244,6 +231,7 @@ def cmd_batch(args: argparse.Namespace) -> int:
 
         pipeline = build_mock_pipeline()
         snapshot.update({"strategy": "fixed", "size": 10000, "overlap": 0, "top_k": 10,
+                         "min_score": 0.0,
                          "embedding": {"provider": "MOCK", "model": "FakeEmbedder"},
                          "llm": {"model": "mock-llm"},
                          "corpus_ref": "tests/fixtures/manifest.json"})
@@ -251,6 +239,23 @@ def cmd_batch(args: argparse.Namespace) -> int:
             Path("tests/fixtures/manifest.json").read_bytes()).hexdigest()
         print(BANNER_MOCK)
     else:
+        settings = load_settings(args.config)
+        snapshot.update({
+            "strategy": settings.chunk_strategy,
+            "size": settings.chunk_size,
+            "overlap": settings.chunk_overlap,
+            "top_k": settings.top_k,
+            "min_score": settings.min_score,
+            "embedding": {
+                "provider": settings.embedding_provider,
+                "model": settings.local_model
+                if settings.embedding_provider == "local" else settings.api_model,
+            },
+            "llm": {"model": settings.llm_model, "temperature": settings.temperature,
+                    "max_tokens": settings.max_tokens},
+            "corpus_ref": str(settings.manifest),
+            "manifest_sha256": hashlib.sha256(settings.manifest.read_bytes()).hexdigest(),
+        })
         pipeline = build_llm_pipeline(settings)
     records = []
     for row in rows:
