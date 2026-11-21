@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import os
 import re
@@ -204,16 +205,43 @@ def cmd_batch(args: argparse.Namespace) -> int:
     if not rows or not args.run_id.strip():
         raise ValueError("questions and run_id must not be empty")
     destination = Path(args.output)
+    snapshot_path = destination.with_suffix(".config.json")
     if destination.exists():
         raise ValueError("output already exists; choose a new run path")
+    if snapshot_path.exists():
+        raise ValueError("configuration snapshot already exists; choose a new run path")
     settings = load_settings(args.config)
     mock = getattr(args, "mock", False)
+    snapshot = {
+        "run_id": args.run_id,
+        "mode": "MOCK" if mock else "REAL",
+        "strategy": settings.chunk_strategy,
+        "size": settings.chunk_size,
+        "overlap": settings.chunk_overlap,
+        "top_k": settings.top_k,
+        "min_score": settings.min_score,
+        "embedding": {"provider": settings.embedding_provider,
+                      "model": settings.local_model if settings.embedding_provider == "local"
+                      else settings.api_model},
+        "llm": {"model": settings.llm_model, "temperature": settings.temperature,
+                "max_tokens": settings.max_tokens},
+        "qa_set_ref": str(Path(args.questions)),
+        "qa_sha256": hashlib.sha256(Path(args.questions).read_bytes()).hexdigest(),
+        "corpus_ref": str(settings.manifest),
+        "manifest_sha256": hashlib.sha256(settings.manifest.read_bytes()).hexdigest(),
+    }
     if mock:
         if not args.run_id.startswith("MOCK-"):
             raise ValueError("MOCK run IDs must start with MOCK-")
         from demo.mock_pipeline import build_mock_pipeline
 
         pipeline = build_mock_pipeline()
+        snapshot.update({"strategy": "fixed", "size": 10000, "overlap": 0, "top_k": 10,
+                         "embedding": {"provider": "MOCK", "model": "FakeEmbedder"},
+                         "llm": {"model": "mock-llm"},
+                         "corpus_ref": "tests/fixtures/manifest.json"})
+        snapshot["manifest_sha256"] = hashlib.sha256(
+            Path("tests/fixtures/manifest.json").read_bytes()).hexdigest()
         print(BANNER_MOCK)
     else:
         pipeline = build_llm_pipeline(settings)
@@ -222,10 +250,14 @@ def cmd_batch(args: argparse.Namespace) -> int:
         answer, hits = pipeline.ask(row["question"].strip())
         records.append({"qid": row["qid"].strip(), "answer": asdict(answer),
                         "retrieved_chunk_ids": [hit.chunk.chunk_id for hit in hits],
-                        "run_id": args.run_id, "config_ref": str(args.config or "config.toml")})
+                        "run_id": args.run_id, "config_ref": str(snapshot_path)})
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
+    snapshot_created = False
     try:
+        with snapshot_path.open("x", encoding="utf-8") as config_stream:
+            snapshot_created = True
+            json.dump(snapshot, config_stream, ensure_ascii=False, indent=2)
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", delete=False,
                                          dir=destination.parent) as stream:
             temporary = Path(stream.name)
@@ -238,6 +270,10 @@ def cmd_batch(args: argparse.Namespace) -> int:
             os.rename(temporary, destination)
         else:
             os.link(temporary, destination)
+    except BaseException:
+        if snapshot_created:
+            snapshot_path.unlink(missing_ok=True)
+        raise
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
