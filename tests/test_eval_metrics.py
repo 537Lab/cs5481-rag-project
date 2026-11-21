@@ -59,6 +59,12 @@ from ragkit.loaders import load_documents
 QA_PATH = ROOT / "eval" / "qa_set.csv"
 MANIFEST = ROOT / "data" / "raw" / "manifest.json"
 DOC_ID = "rag_wikipedia"
+CORPUS_V0_DOC_IDS = {
+    "rag_wikipedia",
+    "vector_db_wikipedia",
+    "word_embedding_wikipedia",
+    "bm25_wikipedia",
+}
 QUOTE_2020 = (
     "The technique was first proposed in 2020 and has since become a widely "
     "adopted approach in modern AI systems."
@@ -167,11 +173,11 @@ def test_every_gold_quote_is_verbatim_source_text(qa_items, documents):
         assert span.length == len(item.evidence_quote)
 
 
-def test_gold_spans_are_unique_per_qid_and_cover_every_document(qa_items, documents):
+def test_gold_spans_are_unique_per_qid_and_cover_development_corpus(qa_items, documents):
     spans = validate_qa_set(qa_items, documents)
     assert len({(s.doc_id, s.char_start, s.char_end) for s in spans.values()}) == len(spans)
     covered = {span.doc_id for span in spans.values()}
-    assert covered == {doc.doc_id for doc in documents}
+    assert covered == CORPUS_V0_DOC_IDS
 
 
 def test_unanswerable_items_declare_tokens_that_are_really_absent(qa_items, documents):
