@@ -313,3 +313,26 @@ def test_failed_publish_cleans_temporary_file(tmp_path, monkeypatch):
     with pytest.raises(OSError, match='publish failure'):
         cli.cmd_batch(args)
     assert list(tmp_path.iterdir()) == []
+
+
+def test_mock_export_configuration_snapshot(tmp_path):
+    import argparse
+    import hashlib
+    import json
+    from pathlib import Path
+
+    from ragkit.cli import cmd_batch
+
+    output = tmp_path / 'mock.jsonl'
+    args = argparse.Namespace(questions='demo/questions.csv', output=str(output),
+                              run_id='MOCK-config', config=None, mock=True)
+    cmd_batch(args)
+    row = json.loads(output.read_text(encoding='utf-8').splitlines()[0])
+    config_path = Path(row['config_ref'])
+    config = json.loads(config_path.read_text(encoding='utf-8'))
+    assert config['mode'] == 'MOCK'
+    assert config['llm']['model'] == row['answer']['model']
+    assert config['embedding']['provider'] == 'MOCK'
+    assert config['top_k'] == 10
+    assert config['qa_sha256'] == hashlib.sha256(Path(args.questions).read_bytes()).hexdigest()
+    assert config['corpus_ref'] == 'tests/fixtures/manifest.json'
