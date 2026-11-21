@@ -3,10 +3,10 @@
 比较 `fixed` 与 `paragraph` 对检索质量的影响。命中率只来自
 `eval.metrics.retrieval_hit_rate()`，本实验不另写 hit@k，也不计算回答正确率或拒答率。
 
-**本页数字是开发用结果，不是正式实验结果。** 语料仍是 `CORPUS_V0`（没有
-`data/raw/frozen_manifest.json`），QA 仍是 `eval/qa_set.csv` 上的开发集。
-`--formal` 会被 `assert_formal_inputs()` 拒绝，因此没有写入
-`eval/results/summary/chunking_comparison/`。
+**本页当前数字是冻结语料上的开发重跑，不是正式实验结果。** PR #14 已把语料冻成
+`cs5481-k8s-v135-16docs-36fd3eedf33f`。QA 仍是 `eval/qa_set.csv` 上的开发集，
+`QA_SET_STATUS` 写明它不是冻结正式集，N01–N08 没有 `REVIEWED_BY`。
+`--formal` 因此退出码为 2，没有写入 `eval/results/summary/chunking_comparison/`。
 
 ## 比的是哪两种策略
 
@@ -22,7 +22,7 @@ size / overlap 网格。
 
 两种策略各写各的 collection：`chunks_fixed` 与 `chunks_paragraph`。一次 `ingest` 只清空当前策略的 collection。
 
-`paragraph` 的块可以长于 `size`。打包上限是 `size`，随后 `_apply_overlap` 再向左补重叠，段间空白也会被带进来。这次实测最长 683，而 `size` 是 600。`fixed` 的窗口本身不超过 `size`，实测最长就是 600。
+`paragraph` 的块可以长于 `size`。打包上限是 `size`，随后 `_apply_overlap` 再向左补重叠，段间空白也会被带进来。这次冻结语料上最长仍是 683（`rag_wikipedia#0007`，3193–3876），`size` 是 600。最短变成 81（`k8s_v135_services#0064`，28407–28488）。`fixed` 的窗口本身不超过 `size`，这次最长 600，最短仍是 147（`vector_db_wikipedia#0006`）。
 
 ## 为什么 gold 是原文字符区间
 
@@ -30,7 +30,7 @@ size / overlap 网格。
 
 gold 是 `qa_set.csv` 里的 `evidence_doc_id` + `evidence_quote`。`locate_evidence()` 把它定位成原文档上的 `[char_start, char_end)`。这个区间不随策略改变。一块算不算命中，看它盖住这个区间的比例是否达到同一个 `min_coverage`（本次 0.5）。
 
-A17 说明为什么不能改用 chunk id。gold 是 `vector_db_wikipedia` 的 2905–3040。`paragraph` 把它切成两段：`#0006` 只盖住 51/135（0.378，低于 0.5），`#0007` 盖住 135/135。命中的是覆盖率，不是「这块的 id 在不在名单里」。
+A17 说明为什么不能改用 chunk id。gold 是 `vector_db_wikipedia` 的 2905–3040。`paragraph` 把它切成两段：`#0006` 只盖住 51/135（0.378，低于 0.5），`#0007` 盖住 135/135。命中的是覆盖率，不是「这块的 id 在不在名单里」。这四篇 Wikipedia 文本没有被 PR #14 改写，所以这些字符区间和 PR #10 里的区间相同。
 
 ## 什么保持不变
 
@@ -43,29 +43,40 @@ A17 说明为什么不能改用 chunk id。gold 是 `vector_db_wikipedia` 的 29
 | `min_coverage` | 0.5 |
 | hit levels | 1 和 3 |
 | embedding | `local:all-MiniLM-L6-v2`（384 维，本地 ONNX，无 API key） |
-| QA | `eval/qa_set.csv@80b1d950f652`，35 题，其中 27 题 answerable 进入命中率分母 |
-| 语料 | `data/raw/manifest.json@b5bfc0d70e4a`，`corpus_frozen=false` |
+| QA | `eval/qa_set.csv@c97051d8789c`，35 题，其中 27 题 answerable 进入命中率分母。状态仍是 development set on CORPUS_V0 |
+| 语料 | `cs5481-k8s-v135-16docs-36fd3eedf33f@bddfe3601885`，`corpus_frozen=true`。16 篇：12 篇 Kubernetes v1.35 + 原来的 4 篇 Wikipedia |
 
 配置快照里的 `llm` 是 `gpt-4o-mini`。那是 `config.toml` 里的名字。这次对比只做检索，**没有调用 LLM**，也没有付费请求。命中率不是回答正确率。
 
-## 开发用结果
+## 冻结语料上的开发重跑
 
 - 命令：`python -m eval.chunking_experiment`
-- 组员重跑：2026-11-17T12:50:10Z（GMT+8 20:50），仓库根目录，已激活 `.venv`，退出码 0。当前 JSON 是这一次写的。
-- 更早一次：2026-11-17T12:43:21Z，由 Cursor 编码 agent 执行，汇总数字相同，记录在 `RUNLOG.md` 第 9 节。
+- 分支：`t2-chunking-frozen-corpus`（从已含 PR #14 的 `origin/main` 拉开）
+- 执行者：Cursor 编码 agent。组员本人尚未重跑这一轮。
+- `generated_at`：`2026-11-21T01:24:36+00:00`（GMT+8 09:24），退出码 0。当前 JSON 是这一次写的。
+- 同一天更早一次 `2026-11-21T01:22:54+00:00` 的汇总数字相同，随后被这次覆盖。那一次的说明文字还把语料写成未冻结的 `CORPUS_V0`，和快照矛盾，所以改了开发说明后再跑了这一次。
 - 原始 JSON：`eval/results/raw/chunking_comparison/comparison.json`（gitignore，不入库）
-- 状态：开发用，非正式实验结果
+- 状态：语料已冻结，QA 仍是开发集，非正式实验结果
+
+| strategy | chunks | length min | length max | length mean | hit@1 | hit@3 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `fixed` | 668 | 147 | 600 | 587.5793 | 16/27 (0.5926) | 23/27 (0.8519) |
+| `paragraph` | 775 | 81 | 683 | 515.7768 | 17/27 (0.6296) | 23/27 (0.8519) |
+
+四篇 Wikipedia 单独仍是 `fixed` 28 块、`paragraph` 33 块。多出来的 640 块和 742 块来自 12 篇 Kubernetes 页面。命中率和下面五处分歧与 2026-11-17 只有那四篇时相同。这五处分歧的 top-3 里没有 Kubernetes 的 chunk id。
+
+## 更早的四篇开发语料
+
+2026-11-17 的运行当时没有 `frozen_manifest.json`。语料引用是 `data/raw/manifest.json@b5bfc0d70e4a`，`corpus_frozen=false`，QA 是 `eval/qa_set.csv@80b1d950f652`。命令同样是 `python -m eval.chunking_experiment`。组员重跑的 JSON 时间是 `2026-11-17T12:50:10+00:00`。原始输出在 `RUNLOG.md` 第 9 节和第 9.1 节。那次 JSON 已被上面这次运行覆盖。
 
 | strategy | chunks | length min | length max | length mean | hit@1 | hit@3 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `fixed` | 28 | 147 | 600 | 554.8571 | 16/27 (0.5926) | 23/27 (0.8519) |
 | `paragraph` | 33 | 89 | 683 | 480.3939 | 17/27 (0.6296) | 23/27 (0.8519) |
 
-`fixed` 的 16/27 与 23/27 和 T4 先前对同一开发集、同一 `fixed` 索引单独跑的 `retrieval_hit_rate()` 一致。`paragraph` 多 5 块，平均更短，hit@1 多 1 题，hit@3 相同。
-
 ## 两个方向相反的漏检
 
-下面两题都是一种策略的 top-3 盖住了 gold（覆盖率 1.0），另一种的 top-3 覆盖率为 0。数字来自上面那次运行，再对照两种分块的字符区间。
+下面两题都是一种策略的 top-3 盖住了 gold（覆盖率 1.0），另一种的 top-3 覆盖率为 0。字符区间来自这次冻结语料上的分块，和 2026-11-17 的 Wikipedia 区间一致。
 
 **A06，只有 `fixed` 在 hit@3 命中。** 问的是 RAG 为什么省计算和费用。gold 是 `rag_wikipedia` 1312–1413，「RAG also reduces the need to retrain LLMs with new data...」。
 
@@ -74,7 +85,7 @@ A17 说明为什么不能改用 chunk id。gold 是 `vector_db_wikipedia` 的 29
 
 同一句话，`paragraph` 的窗口更靠后、也更长，邻接文本不同，这块的向量就没进前三。
 
-**A17，只有 `paragraph` 命中，而且 hit@3 也命中。** 问的是 RAG 查询时对用户 prompt 做了什么。gold 是 `vector_db_wikipedia` 2905–3040，「Given a user prompt, the feature vector of the prompt is computed...」。
+**A17，只有 `paragraph` 命中，而且 hit@1 同样命中。** 问的是 RAG 查询时对用户 prompt 做了什么。gold 是 `vector_db_wikipedia` 2905–3040，「Given a user prompt, the feature vector of the prompt is computed...」。
 
 - `fixed` 把整句放进 `vector_db_wikipedia#0005`（2584–3179，595 字符）。这块不在 top-3。top-3 是 `#0006`、`rag_wikipedia#0000`、`rag_wikipedia#0002`，覆盖率 0。
 - `paragraph` 把这句切开。`#0006`（2274–2956）只盖住 51/135，低于 0.5，即使被取回也不算命中。`#0007`（2876–3221，345 字符）盖住全句，排名第 1（score 0.5312）。
@@ -85,6 +96,6 @@ A17 说明为什么不能改用 chunk id。gold 是 `vector_db_wikipedia` 的 29
 
 ## 这次没有做的事
 
-- 没有把开发数字写进 `eval/results/summary/`。`--out` 指向这个目录（含相对路径和符号链接）会被拒绝。`--formal` 只接受已提交的 `eval/qa_set.csv`，并且当前退出码是 2，原因是 I1 快照不存在，以及 8 道 unanswerable 题没有 `REVIEWED_BY`。
+- 没有把这次数字写进 `eval/results/summary/`。`--formal` 的语料检查已经通过，剩下的拒绝原因只有 N01–N08 没有 `REVIEWED_BY`。没有给这些题补评审人，那是人工证明，不属于这次重跑。
 - 没有调用 LLM，没有回答正确率，没有拒答率。
-- 语料或 QA 冻结之后，要用同一命令重跑，并只有在 `--formal` 通过之后才能把汇总放进 `summary/chunking_comparison/`。
+- QA 被 T4 冻住、并且 `--formal` 退出码变成 0 之后，才能把汇总放进 `summary/chunking_comparison/`。在那之前，上面的 hit 数字仍然是开发重跑。

@@ -11,6 +11,7 @@ from eval.chunking_experiment import (
     DEVELOPMENT_LABEL,
     build_payload,
     compare_retrieval,
+    development_note,
     length_stats,
     main,
     resolve_destination,
@@ -291,6 +292,22 @@ def test_development_writer_does_not_emit_a_summary_bundle(tmp_path):
     with pytest.raises(QASetError, match="non-formal"):
         write_result(payload, tmp_path / "summary" / "chunking_comparison", formal=True)
     assert not (tmp_path / "summary").exists()
+
+
+def test_development_note_follows_the_corpus_snapshot():
+    frozen = development_note(
+        {
+            "corpus_ref": "cs5481-k8s-v135-16docs-36fd3eedf33f@bddfe3601885",
+            "corpus_frozen": True,
+            "qa_set_status": "development set",
+        }
+    )
+    assert "cs5481-k8s-v135-16docs-36fd3eedf33f@bddfe3601885 is frozen" in frozen
+    assert "Not a formal experiment result" in frozen
+    unfrozen = development_note(
+        {"corpus_ref": "data/raw/manifest.json@abc", "corpus_frozen": False, "qa_set_status": "dev"}
+    )
+    assert "data/raw/manifest.json@abc is not frozen" in unfrozen
 
 
 def test_payload_rejects_strategies_that_do_not_share_parameters():
