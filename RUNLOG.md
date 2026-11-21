@@ -1120,3 +1120,56 @@ exit=2
 顺带一条对 reviewer 有用的：#15 页面上显示的是 **8 commits / +9,748 −250 / 29 files**，其中包含
 尚未合并的 #14 全部内容（base = `main` 的必然结果，不是本 PR 多写了代码）。
 
+### 10.12 第二次合并 `origin/main`（`0ee7d5e`）+ 把拒答题核对转交组员（2026-11-21）
+
+这一轮做了三件不同的事，逐件登记，因为它们的可信度来源不一样。
+
+**（1）解冲突：只做追加，不碰别人的行。** `main` 在 `6bc7600` 之后又合入了 T5 的 #16（`0ee7d5e`），
+本分支与 base 再次只剩一个冲突文件 `docs/AI_USAGE.md`。这次 git 报的冲突标记在**第 1 / 102 / 201 行**，
+即整份文件互相对不齐，尾部拼接的解法不适用，所以先把三个 stage 导出再逐行对齐：
+
+| stage | 行数 | 相对共同祖先的变化 |
+| --- | --- | --- |
+| base（`:1:`） | 93 | — |
+| ours（`:2:`，本分支） | 100 | 改一处小节标题、追加两行 T4 记录、把末尾段落由 2 行改写为 6 行 |
+| theirs（`:3:`，main） | 98 | **只在文件末尾追加 `## T5 additional records` 一节（2 行记录）** |
+
+两侧唯一的重叠就在文件末尾，因此正确解是「本分支全文 + main 追加的那一节原样附后」。
+解完用脚本断言三件事，而不是目测：追加块与 `origin/main` 的版本**逐字节相同**（4 行，`sha256` 前缀 `5609f13c`）、
+本分支的行**零丢失**、`git diff --cached HEAD -- docs/AI_USAGE.md` 只有 5 行 `+`、无 `-`。
+合并后 `git diff --cached --name-only HEAD` 只列出 T5 的 9 个文件（`demo/`、`docs/ANSWER_QUALITY.md`、
+`ragkit/cli.py`、`ragkit/generation.py`、`tests/test_generation.py` 等），`eval/`、`tests/test_eval_metrics.py`、
+`tests/test_loaders.py`、`data/raw/`、`.gitattributes`、`RUNLOG.md` 均未被这次合并改动。
+
+**（2）合并后实跑（本机，全部真实退出码）：**
+
+| 命令 | 结果 |
+| --- | --- |
+| `ruff check .` | All checks passed（`exit=0`） |
+| `python -m pytest -o addopts="" -q` | **186 passed / 2 skipped in 6.47s**（上轮 168；+18 例来自 #16 的 `tests/test_generation.py`） |
+| `python -m eval.metrics validate` | `exit=0`；23 个 `ABSENT_TOKENS` 均以词边界确认不存在；`0/10 carry REVIEWED_BY`；corpus binding verified `True`；4/16 篇冻结文档无 answerable 题 |
+| `python -m eval.metrics validate --qa eval/qa_set_dev_v0.csv` | `exit=0`（开发集 0/8 签名） |
+| `python -m eval.metrics validate --require-reviewed` | **`exit=2`**（KN01–KN10 全部列名为未签名） |
+| `python -m eval.chunking_experiment --formal` | **`exit=2`**，拒绝理由只剩未签名一条 |
+
+**（3）把人工核对转交组员，并核对 `537Lab` 那条 non-approving review。**
+`537Lab` 在 `93bfb03` 上留的是 **COMMENTED**（不是 approve），正文明确写「not a human attestation」、
+「I cannot fill `REVIEWED_BY`」。它可执行的请求有四项：逐题记录拒答评审、专门让人裁决 KN03、消歧义、
+在 #13/#14 并入后刷新分支。逐条对仓库核验的结果：
+
+| review 的断言 | 我这轮的独立复核结果 |
+| --- | --- |
+| 「26 条 gold quote 在其声明文档内逐字命中**恰好一次**」 | **成立且可复现**：26/26 篇内唯一，且**全库范围也只命中一次**（0 条重复、0 条找不到）——这条比 `validate` 本身检查的更强，已单独跑脚本验证 |
+| 「10 条拒答全无 `REVIEWED_BY`，token 缺失只是必要条件」 | 成立，0/10 |
+| 「KN03 需人裁决：`services` 页链到 `.go` 源码，可能间接暗示实现语言」 | 该疑问针对 `93bfb03`；`b2263d9` 已查明那个链接指向 `pkg/kubelet/envvars/envvars.go`（kubelet 环境变量），与 kube-proxy 无关。我这轮的同义词扫描独立复现：`.go` 在快照内共 4 处命中（`services:859`、`probes:205`、`kubectl_quick_reference:436/437`），无一处说明 kube-proxy 用什么写。**裁决权仍在组员** |
+| 「刷新分支以便不含 #13/#14 的重复改动」 | 已通过 `ac173a2` 与本节这次合并两次完成；#14 已入 main，重复部分随之消失 |
+| 「CI 通过不等于人工评审门禁关闭」 | 成立：本机 `--require-reviewed` 与 `--formal` 均 `exit=2` |
+
+转交动作：以组员已登录的浏览器会话，在 PR #15 发出 `issuecomment-7058643165`（14 201 字符），内含
+KN01–KN10 的空白判定表（只允许填「同意 / 不同意 / 该改」）与每题的同义词扫描摘录，并要求结论由
+`ziqilin669` 本人以其账号给出。**本轮没有任何一条 `REVIEWED_BY` 被写入**——门禁仍关闭，这一点不能因为
+「已发出请求」而改口径。另外那条 approve 针对的 commit 是 `93bfb03`，落后当前 head 五个提交。
+
+**留给 T5 的一处排版（我没改，因为不是我写的行）**：main 上 `## T5 additional records` 的两行表格缺少
+`| --- |` 表头分隔行，GitHub 不会把它渲染成表格，只会显示成竖线原文。属于 #16 的内容，按所有权应由 T5 自己修。
+
