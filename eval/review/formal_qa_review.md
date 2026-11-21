@@ -77,9 +77,9 @@ does not support. Ambiguous items should be rewritten, not graded around.
 
 ## 3. Sign-off
 
-- Reviewer name(s) and date: ______________________
-- Items changed after review: ______________________
-- Remaining disagreements (adjudicated by a third member): ______________________
+- Reviewer name(s) and date: ziqilin669, 2026-11-21
+- Items changed after review: none; KN07 kept as written
+- Remaining disagreements (adjudicated by a third member): none
 
 Per `eval/judge_protocol.md` §1 the person who wrote an item may not be the only
 grader of that item; this sheet was drafted with coding-agent assistance and the
