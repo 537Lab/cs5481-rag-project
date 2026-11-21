@@ -82,7 +82,7 @@ whose cells are *all* empty is refused outright (`exit=2`), because passing the
 blank sheet back as if it were a result is the most likely mistake in this
 protocol. Because a partially graded set is not a measurement either,
 `grading_coverage` (`graded answerable / answerable`) is reported next to the
-rate: a 1/1 rate at 1/27 coverage is a smoke test, not a result.
+rate: a 1/1 rate at 1/26 coverage is a smoke test, not a result.
 
 **Adjudication.** Where the two raters disagree, a third member picks
 `correct` / `incorrect` for that item after re-reading the gold quote in the
@@ -103,8 +103,8 @@ cannot disagree about an item that was never graded.
   rater's own marginal distribution over the three grades.
 
 Report both numbers together with the count of adjudicated items. With roughly
-27 answerable items, a single disagreement moves the rate by ~3.7 percentage
-points, so **kappa on 27 items is a weak signal** — say so in the limitations
+26 answerable items, a single disagreement moves the rate by ~3.8 percentage
+points, so **kappa on 26 items is a weak signal** — say so in the limitations
 section rather than presenting it as a validated measurement. Any item that both
 raters marked `unsure` must be listed explicitly in the report; it is a signal
 that the QA item or its gold quote is ambiguous, not that the system failed.
@@ -122,7 +122,7 @@ judgment and no LLM judgment is involved in that step.
 **Deciding that a question is unanswerable is a different matter, and it is a
 human call.** `ABSENT_TOKENS` in `notes` is machine-checked by
 `validate_qa_set()`, but it proves only that the declared strings do not occur
-in `data/raw/` — a *necessary* condition, never proof:
+in `data/raw/` as whole words — a *necessary* condition, never proof:
 
 * a document can answer a question without ever using the question's words
   ("who proposed it" vs "first proposed in 2020"), so an absent token can sit
@@ -131,21 +131,31 @@ in `data/raw/` — a *necessary* condition, never proof:
   property — is the case most likely to produce a confident wrong answer, and
   judging whether it is truly unanswerable needs someone to read the document.
 
+`token_occurs()` is the machine part of that check and it is deliberately not
+the weakest possible one: a token counts as present when the corpus inflects it
+(`gpu` matches `gpus`), when the phrase is split only by a line break, and
+`fee` is *not* counted present inside `feedback`. Whoever proposes a refusal
+item picks the tokens; whoever reviews it decides whether the absence is enough.
+
 Each unanswerable item therefore needs a named person recorded in `notes` as
 `REVIEWED_BY: <name>`. `metrics.py` treats an item without that marker as
 pending review, `--require-reviewed` turns pending review into a hard failure,
 and `--formal` refuses to write a summary on top of unreviewed labels. Until the
-eight refusal items in `eval/qa_set.csv` carry real names, they are the item
+ten refusal items in `eval/qa_set.csv` carry real names — and the eight in the
+development set `eval/qa_set_dev_v0.csv` keep theirs — they are the item
 author's proposal: report the abstention numbers as provisional and say so.
+[`review/formal_qa_review.md`](review/formal_qa_review.md) is the working sheet:
+it lists, per item, which document to re-read and which strings to search for.
 Signing off means actually re-reading the document — a name in that column that
-no one checked is worse than an empty one.
+no one checked is worse than an empty one. The item author may not be the only
+signer of their own item.
 
 ## 4. LLM-as-judge: allowed only under these conditions
 
 An LLM judge is **optional, secondary, and never a substitute** for the human
 grades. It may be used only if all of the following hold:
 
-1. **Group approval for the spend.** A judge pass over 35 items is a paid API
+1. **Group approval for the spend.** A judge pass over 36 items is a paid API
    call. Per `START_HERE.md` and `CONTRIBUTING.md`, paid calls need the group's
    prior agreement and a user-supplied key. Until that exists, this path stays
    unexecuted, and the report must say "no LLM judge was run".
@@ -166,19 +176,26 @@ correctness while the human grading is pending.
 
 ## 5. Known limits of these metrics (state them in the report)
 
-- **The corpus is four Wikipedia excerpts.** "Correct" means *correct with
-  respect to `data/raw/`*, not *correct about the world*. A factually true
-  statement unsupported by our corpus is `incorrect` here; that is intended.
-  The 35 current items were written against that development corpus
-  (`CORPUS_V0`), and `metrics.py` prints that status in every report as
-  `qa_set_status`; when T1 freezes the formal corpus the gold quotes must be
+- **What "correct" means here.** "Correct" means *correct with respect to
+  `data/raw/`*, not *correct about the world*. A factually true statement
+  unsupported by our corpus is `incorrect` here; that is intended. The formal set
+  `eval/qa_set.csv` is quoted against the frozen Kubernetes snapshot (interface
+  I1, `data/raw/frozen_manifest.json`); the 35-item Wikipedia set lives on as
+  `eval/qa_set_dev_v0.csv` and is used for plumbing, never as a formal result.
+  `metrics.py` derives `qa_set_status` from the file it read and from what its
+  rows cite, and prints it in every report, so a development number cannot be
+  relabelled by a flag. If the snapshot changes, the gold quotes must be
   re-validated and the numbers re-run before anything is written into the report.
+- **Domain shift is not measured by these metrics.** The development set asks
+  about RAG concepts in encyclopedia prose; the formal set asks about Kubernetes
+  reference pages with tables, YAML and command lines. A rate that looks good on
+  one does not transfer to the other, so the two are never averaged.
 - **Extraction-heavy reference answers.** Most items ask for a definition, a
-  date, or a named property, so a faithful answer is close to a paraphrase of
-  one span. Nuanced synthesis, comparison, and multi-hop questions are under
+  field name, or a named property, so a faithful answer is close to a paraphrase
+  of one span. Nuanced synthesis, comparison, and multi-hop questions are under
   represented — the correctness figure therefore flatters extractive systems.
 - **Single-run noise.** The LLM is sampled once per question. No confidence
-  interval is claimed from n = 27, and rates are reported as
+  interval is claimed from n = 26, and rates are reported as
   `numerator/denominator`, which `metrics.py` always prints, so the small
   denominators stay visible.
 - **`min_coverage = 0.5` is a convention**, not a truth. It is passed through to
