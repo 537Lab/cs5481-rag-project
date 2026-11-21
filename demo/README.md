@@ -4,10 +4,16 @@ Run from the repository root with Python 3.11 or newer.
 
 ```powershell
 python -m demo.run
+python -m demo.validate_export
 python -m ragkit.cli batch --mock --questions demo/questions.csv --run-id MOCK-example --output eval/results/raw/MOCK-example.jsonl
 ```
 
 Synthetic fixtures and scripted responses require no API key. The demo displays a normal answer with its source excerpt and two refusal cases. Choose a new output path when repeating a batch run. Citation structure does not establish semantic support. Real LLM integration remains pending team API approval.
+
+`demo.validate_export` performs an offline T5-to-T4 handoff smoke check: it exports
+the two synthetic questions, reads them with T4's existing `load_outputs`, checks
+the MOCK provenance settings, and removes its temporary artifacts on exit. It
+does not calculate metrics or use the formal QA dataset.
 
 ## Classroom walkthrough (MOCK, about three minutes)
 
