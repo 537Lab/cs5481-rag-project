@@ -114,7 +114,7 @@ def citation_quote_problems(answer: Answer, retrieved: Sequence[RetrievedChunk])
     problems: list[str] = []
     for citation in answer.citations:
         chunk = by_id.get(citation.chunk_id)
-        if chunk is not None and citation.quote not in chunk.text:
+        if chunk is not None and (not citation.quote.strip() or citation.quote not in chunk.text):
             problems.append(f"{citation.chunk_id}: quote is not verbatim source text")
     return problems
 
@@ -158,6 +158,37 @@ def verify_citations(answer: Answer, retrieved: Sequence[RetrievedChunk]) -> boo
     return verify_citation_structure(answer, retrieved)
 
 
+def claim_coverage_problems(text: str) -> list[str]:
+    """Conservative sentence/list coverage heuristic, without semantic judgement."""
+    # Keep a citation following sentence punctuation attached to that sentence.
+    normalized = re.sub(r"([.!?])\s+(\[[^\]]+\])", r" \2\1", text)
+    units = re.split(r"(?<=[.!?。！？])\s+|\n+|；|;", normalized)
+    return [unit.strip() for unit in units
+            if re.search(r"\w", re.sub(CITATION_PATTERN, "", unit))
+            and not re.search(CITATION_PATTERN, unit)]
+
+
+def refusal_reason(raw: object, retrieved: Sequence[RetrievedChunk]) -> str | None:
+    """Explain deterministic generation gates without changing the frozen Answer."""
+    if not retrieved:
+        return "empty_retrieval"
+    if not isinstance(raw, str) or not raw.strip():
+        return "invalid_or_empty_output"
+    if raw.strip().upper().startswith(NO_ANSWER_TOKEN):
+        return "model_reported_insufficient_evidence"
+    ids = re.findall(CITATION_PATTERN, raw)
+    available = {hit.chunk.chunk_id: hit.chunk for hit in retrieved}
+    if any(cid not in available for cid in ids):
+        return "unknown_citation_id"
+    if not ids:
+        return "missing_citations"
+    if claim_coverage_problems(raw):
+        return "uncovered_claim"
+    if any(not available[cid].text.strip() for cid in ids):
+        return "empty_cited_evidence"
+    return None
+
+
 class AnswerGenerator:
     """The only component that talks to an LLM client."""
 
@@ -170,6 +201,8 @@ class AnswerGenerator:
         retrieved: Sequence[RetrievedChunk],
         llm: LLMClient | None = None,
     ) -> Answer:
+        if not isinstance(question, str) or not question.strip():
+            raise ValueError("question must not be empty")
         client = llm or self.llm
         if client is None:
             raise ValueError("an LLMClient is required; pass one to generate()")
@@ -180,18 +213,15 @@ class AnswerGenerator:
 
         system_prompt, user_prompt = build_prompt(question, retrieved)
         raw = client.complete(system_prompt, user_prompt)
+        if not isinstance(raw, str):
+            return self._abstain(question, client, raw="")
         stripped = raw.strip()
 
-        if not stripped or stripped.upper().startswith(NO_ANSWER_TOKEN):
+        if refusal_reason(raw, retrieved):
             return self._abstain(question, client, raw)
 
         cited_ids = re.findall(CITATION_PATTERN, stripped)
-        # Gate: a single invented id invalidates the whole answer.
-        if any(cid not in by_id for cid in cited_ids):
-            return self._abstain(question, client, raw)
         valid_ids = _unique(cited_ids)
-        if not valid_ids:
-            return self._abstain(question, client, raw)
 
         citations = tuple(
             Citation(

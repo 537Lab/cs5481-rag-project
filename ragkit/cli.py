@@ -11,11 +11,16 @@ Every command prints a REAL / MOCK banner. Nothing is silently simulated.
 from __future__ import annotations
 
 import argparse
+import csv
+import json
+import os
 import re
 import sys
+import tempfile
+from dataclasses import asdict
+from pathlib import Path
 
 from ragkit.config import load_settings, require_api_key
-from ragkit.contracts import CITATION_PATTERN
 from ragkit.pipeline import build_llm_pipeline, build_pipeline
 
 BANNER_REAL = "[REAL] real documents / real embeddings / real Chroma index"
@@ -85,6 +90,10 @@ def cmd_ask(args: argparse.Namespace) -> int:
     print(f"MODEL   : {answer.model}")
     print(f"ABSTAINED: {answer.abstained}")
     print(f"ANSWER  : {answer.answer_text}\n")
+    if answer.abstained:
+        from ragkit.generation import refusal_reason
+
+        print(f"REFUSAL: {refusal_reason(answer.raw, hits) or 'upstream_refusal'}")
     if answer.citations:
         from ragkit.generation import (
             STRUCTURAL_VALIDATION_NOTE,
@@ -130,7 +139,9 @@ def cmd_offline_demo(_args: argparse.Namespace) -> int:
 
     def scripted_answer(_system: str, user: str) -> str:
         context = user.split("QUESTION:")[0]
-        ids = re.findall(CITATION_PATTERN, context)
+        blocks = re.findall(r"\[([^\]]+)\] \(document:.*?\)\n(.*?)(?=\n\n---|$)",
+                            context.strip(), re.DOTALL)
+        ids = [cid for cid, text in blocks if "8080" in text]
         if "MENU_ON_MARS" in user:
             return "NO_ANSWER"
         if "FABRICATE" in user:
@@ -139,7 +150,7 @@ def cmd_offline_demo(_args: argparse.Namespace) -> int:
 
     llm = ScriptedLLM(scripted_answer)
     pipeline = RAGPipeline(
-        settings=settings_stub(top_k=2),
+        settings=settings_stub(top_k=10),
         chunker=FixedSizeChunker(ChunkConfig(size=120, overlap=20)),
         embedder=FakeEmbedder(),
         store=InMemoryStore(),
@@ -166,9 +177,71 @@ def cmd_offline_demo(_args: argparse.Namespace) -> int:
         print(f"Q: {question}")
         print(f"abstained={answer.abstained}  citations={list(answer.citation_ids)}")
         print(f"A: {answer.answer_text}")
+        if answer.abstained:
+            from ragkit.generation import refusal_reason
+
+            print(f"REFUSAL: {refusal_reason(answer.raw, hits)}")
+        for citation in answer.citations:
+            print(f"SOURCE: {citation.source_uri} [{citation.chunk_id}]")
+            print(f"VERBATIM EXCERPT: {citation.quote!r}")
         print(f"structure_verified={verify_citation_structure(answer, hits)} "
               f"(id + verbatim quote ONLY; NOT factual correctness)\n")
     print("This was a MOCK run. For REAL ingestion/retrieval see README.md.")
+    return 0
+
+
+def cmd_batch(args: argparse.Namespace) -> int:
+    """Export I4 records after validating all input, without overwriting runs."""
+    with Path(args.questions).open(encoding="utf-8-sig", newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    seen = set()
+    for row in rows:
+        qid = (row.get("qid") or "").strip()
+        question = (row.get("question") or "").strip()
+        if not qid or not question or qid in seen:
+            raise ValueError("each row needs a unique nonempty qid and a nonempty question")
+        seen.add(qid)
+    if not rows or not args.run_id.strip():
+        raise ValueError("questions and run_id must not be empty")
+    destination = Path(args.output)
+    if destination.exists():
+        raise ValueError("output already exists; choose a new run path")
+    settings = load_settings(args.config)
+    mock = getattr(args, "mock", False)
+    if mock:
+        if not args.run_id.startswith("MOCK-"):
+            raise ValueError("MOCK run IDs must start with MOCK-")
+        from demo.mock_pipeline import build_mock_pipeline
+
+        pipeline = build_mock_pipeline()
+        print(BANNER_MOCK)
+    else:
+        pipeline = build_llm_pipeline(settings)
+    records = []
+    for row in rows:
+        answer, hits = pipeline.ask(row["question"].strip())
+        records.append({"qid": row["qid"].strip(), "answer": asdict(answer),
+                        "retrieved_chunk_ids": [hit.chunk.chunk_id for hit in hits],
+                        "run_id": args.run_id, "config_ref": str(args.config or "config.toml")})
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", delete=False,
+                                         dir=destination.parent) as stream:
+            temporary = Path(stream.name)
+            for record in records:
+                stream.write(json.dumps(record, ensure_ascii=False) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        # A hard link publishes the complete file and fails if another run won the path.
+        if os.name == "nt":
+            os.rename(temporary, destination)
+        else:
+            os.link(temporary, destination)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    print(f"Exported {len(records)} {'MOCK' if mock else 'REAL'} answers to {destination}")
     return 0
 
 
@@ -193,6 +266,13 @@ def build_parser() -> argparse.ArgumentParser:
     ask.add_argument("question")
     ask.set_defaults(func=cmd_ask)
 
+    batch = sub.add_parser("batch", help="REAL: export QA CSV answers using I4 JSONL")
+    batch.add_argument("--questions", required=True)
+    batch.add_argument("--output", required=True)
+    batch.add_argument("--run-id", required=True)
+    batch.add_argument("--mock", action="store_true", help="synthetic fixture pipeline, no API")
+    batch.set_defaults(func=cmd_batch)
+
     demo = sub.add_parser("offline-demo", help="MOCK: zero-setup walkthrough")
     demo.set_defaults(func=cmd_offline_demo)
     return parser
@@ -200,7 +280,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
-    return int(args.func(args))
+    try:
+        if hasattr(args, "question") and not args.question.strip():
+            raise ValueError("question must not be empty")
+        return int(args.func(args))
+    except (OSError, ValueError, RuntimeError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
