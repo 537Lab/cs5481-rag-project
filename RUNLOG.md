@@ -1152,6 +1152,15 @@ exit=2
 | `python -m eval.metrics validate --require-reviewed` | **`exit=2`**（KN01–KN10 全部列名为未签名） |
 | `python -m eval.chunking_experiment --formal` | **`exit=2`**，拒绝理由只剩未签名一条 |
 
+推送 `f4cc5fa` 后的**云端**结果（从 PR / Checks 页读到，本机无 `gh` CLI）：`ci / check` **succeeded in 28s**，
+run `44877582328` / job `136765583598`，页面上可见的步骤均为 `success`（含 Static check (ruff)、Tests (offline)、
+Verify no secret was committed），唯一 annotation 仍只是 "Node.js 20 is deprecated"；Merge box 已从
+`This branch has conflicts that must be resolved` 变为 `All checks have passed` + `No conflicts with base branch` +
+`Merging can be performed automatically.`，PR 现为 7 commits。另外两条当时读到但**不能当成好消息**的事实：
+`537Lab` 与 `ziqilin669` 的两条 review 链接仍都指向 `93bfb03`（即页面上的「1 approving review」不覆盖当前代码），
+且截至本轮结束 `ziqilin669` **尚未回复**那条判定表。本轮登记自身会产生新 head，它的 CI 结论只记在 PR 页面上，
+不在此自指追记，否则这个循环不会结束。
+
 **（3）把人工核对转交组员，并核对 `537Lab` 那条 non-approving review。**
 `537Lab` 在 `93bfb03` 上留的是 **COMMENTED**（不是 approve），正文明确写「not a human attestation」、
 「I cannot fill `REVIEWED_BY`」。它可执行的请求有四项：逐题记录拒答评审、专门让人裁决 KN03、消歧义、
