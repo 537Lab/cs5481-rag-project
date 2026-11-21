@@ -313,3 +313,103 @@ def test_failed_publish_cleans_temporary_file(tmp_path, monkeypatch):
     with pytest.raises(OSError, match='publish failure'):
         cli.cmd_batch(args)
     assert list(tmp_path.iterdir()) == []
+
+
+def test_mock_export_configuration_snapshot(tmp_path):
+    import argparse
+    import hashlib
+    import json
+    from pathlib import Path
+
+    from ragkit.cli import cmd_batch
+
+    output = tmp_path / 'mock.jsonl'
+    args = argparse.Namespace(questions='demo/questions.csv', output=str(output),
+                              run_id='MOCK-config', config=None, mock=True)
+    cmd_batch(args)
+    row = json.loads(output.read_text(encoding='utf-8').splitlines()[0])
+    config_path = Path(row['config_ref'])
+    config = json.loads(config_path.read_text(encoding='utf-8'))
+    assert config['mode'] == 'MOCK'
+    assert config['llm']['model'] == row['answer']['model']
+    assert config['embedding']['provider'] == 'MOCK'
+    assert config['top_k'] == 10
+    assert config['min_score'] == 0.0
+    assert config['qa_sha256'] == hashlib.sha256(Path(args.questions).read_bytes()).hexdigest()
+    assert config['corpus_ref'] == 'tests/fixtures/manifest.json'
+
+
+def test_mock_snapshot_ignores_real_manifest_and_retrieval_config(tmp_path):
+    import argparse
+    import json
+
+    from ragkit.cli import cmd_batch
+
+    config = tmp_path / 'config.toml'
+    config.write_text('''
+[paths]
+raw_dir = "missing/raw"
+manifest = "missing/manifest.json"
+index_dir = "missing/index"
+[chunking]
+strategy = "paragraph"
+size = 321
+overlap = 12
+[embedding]
+provider = "api"
+local_model = "unused-local"
+local_dimension = 1
+api_model = "unused-api"
+api_dimension = 2
+[llm]
+model = "unused-llm"
+temperature = 0.9
+max_tokens = 99
+[retrieval]
+top_k = 77
+min_score = 0.85
+''', encoding='utf-8')
+    output = tmp_path / 'mock.jsonl'
+    args = argparse.Namespace(questions='demo/questions.csv', output=str(output),
+                              run_id='MOCK-independent', config=str(config), mock=True)
+
+    cmd_batch(args)
+
+    snapshot = json.loads(output.with_suffix('.config.json').read_text(encoding='utf-8'))
+    assert snapshot['mode'] == 'MOCK'
+    assert snapshot['strategy'] == 'fixed'
+    assert snapshot['top_k'] == 10
+    assert snapshot['min_score'] == 0.0
+    assert snapshot['corpus_ref'] == 'tests/fixtures/manifest.json'
+
+@pytest.mark.parametrize('response', [
+    '[doc_a#0000]',
+    '第一句没有引用。第二句有引用[doc_a#0000]。',
+])
+def test_citation_only_and_uncovered_chinese_sentence_refuse(response):
+    generator, _ = _generator(response)
+    assert generator.generate('q', _hits()).abstained
+
+
+def test_chinese_claims_with_individual_citations_pass():
+    generator, _ = _generator('第一句[doc_a#0000]。第二句[doc_a#0001]。')
+    assert not generator.generate('q', _hits()).abstained
+
+
+@pytest.mark.parametrize('content', [
+    'qid,question,question\nx,q,q\n',
+    'qid,question\nx,q,unexpected\n',
+    'qid,prompt\nx,q\n',
+])
+def test_invalid_csv_shape_before_generation(tmp_path, content):
+    import argparse
+
+    from ragkit.cli import cmd_batch
+
+    source = tmp_path / 'bad.csv'
+    source.write_text(content, encoding='utf-8')
+    args = argparse.Namespace(questions=str(source), output=str(tmp_path / 'out.jsonl'),
+                              run_id='MOCK-bad', config=None, mock=True)
+    with pytest.raises(ValueError, match='CSV'):
+        cmd_batch(args)
+    assert not (tmp_path / 'out.jsonl').exists()
