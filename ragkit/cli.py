@@ -194,9 +194,16 @@ def cmd_offline_demo(_args: argparse.Namespace) -> int:
 def cmd_batch(args: argparse.Namespace) -> int:
     """Export I4 records after validating all input, without overwriting runs."""
     with Path(args.questions).open(encoding="utf-8-sig", newline="") as stream:
-        rows = list(csv.DictReader(stream))
+        reader = csv.DictReader(stream)
+        if not reader.fieldnames or not {"qid", "question"}.issubset(reader.fieldnames):
+            raise ValueError("CSV header must include qid and question")
+        if len(reader.fieldnames) != len(set(reader.fieldnames)):
+            raise ValueError("CSV header contains duplicate columns")
+        rows = list(reader)
     seen = set()
     for row in rows:
+        if None in row:
+            raise ValueError("CSV row contains more values than the header")
         qid = (row.get("qid") or "").strip()
         question = (row.get("question") or "").strip()
         if not qid or not question or qid in seen:
