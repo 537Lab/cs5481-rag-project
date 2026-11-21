@@ -197,3 +197,119 @@ def test_verify_citations_is_only_a_structural_alias():
     answer = generator.generate("Which port?", _hits())
     assert verify_citations(answer, _hits()) == verify_citation_structure(answer, _hits())
     assert "STRUCTURAL ONLY" in verify_citations.__doc__
+
+@pytest.mark.parametrize('response', [None, {}, '', 'Uncited claim. Another claim [doc_a#0000]'])
+def test_invalid_output_or_partial_coverage_refuses(response):
+    generator, _ = _generator(response)
+    assert generator.generate('q', _hits()).abstained
+
+
+def test_multiple_claims_and_citations():
+    generator, _ = _generator('Alpha uses 8080 [doc_a#0000]. Beta is read-only [doc_a#0001].')
+    answer = generator.generate('q', _hits())
+    assert not answer.abstained
+    assert len(answer.citations) == 2
+
+
+def test_batch_i4_export(tmp_path, monkeypatch):
+    import argparse
+    import json
+
+    from eval.metrics import load_outputs
+    from ragkit import cli
+
+    generator, _ = _generator('Alpha uses 8080 [doc_a#0000]')
+
+    class Pipeline:
+        def ask(self, question):
+            return generator.generate(question, _hits()), _hits()
+
+    monkeypatch.setattr(cli, 'build_llm_pipeline', lambda settings: Pipeline())
+    source = tmp_path / 'questions.csv'
+    source.write_text('qid,question\nMOCK01,Which port?\n', encoding='utf-8')
+    output = tmp_path / 'mock.jsonl'
+    args = argparse.Namespace(questions=str(source), output=str(output),
+                              run_id='MOCK-test', config=None)
+    assert cli.cmd_batch(args) == 0
+    row = json.loads(output.read_text(encoding='utf-8'))
+    assert row['run_id'] == 'MOCK-test'
+    assert row['retrieved_chunk_ids'] == list(CHUNK_TEXTS)
+    assert 'MOCK01' in load_outputs(output)
+    with pytest.raises(ValueError, match='already exists'):
+        cli.cmd_batch(args)
+
+@pytest.mark.parametrize('csv_text', ['qid,question\nx,\n',
+                                     'qid,question\nx,q\nx,q2\n', 'qid,question\n'])
+def test_batch_rejects_input_before_model_call(tmp_path, monkeypatch, csv_text):
+    import argparse
+
+    from ragkit import cli
+
+    def forbidden(settings):
+        pytest.fail('invalid input must be rejected before constructing a model')
+
+    monkeypatch.setattr(cli, 'build_llm_pipeline', forbidden)
+    source = tmp_path / 'bad.csv'
+    source.write_text(csv_text, encoding='utf-8')
+    args = argparse.Namespace(questions=str(source), output=str(tmp_path / 'out.jsonl'),
+                              run_id='test', config=None)
+    with pytest.raises(ValueError):
+        cli.cmd_batch(args)
+
+
+def test_provider_error_propagates():
+    def fail(system, user):
+        raise RuntimeError('provider unavailable')
+
+    with pytest.raises(RuntimeError, match='provider unavailable'):
+        AnswerGenerator(ScriptedLLM(fail)).generate('q', _hits())
+
+@pytest.mark.parametrize(('raw', 'reason'), [
+    ('NO_ANSWER', 'model_reported_insufficient_evidence'),
+    ('Unsupported.', 'missing_citations'),
+    ('Claim [ghost#9]', 'unknown_citation_id'),
+    ('Uncited. Cited [doc_a#0000]', 'uncovered_claim'),
+    ('', 'invalid_or_empty_output'),
+    ('Claim [doc_a#0000]', None),
+])
+def test_refusal_diagnostics(raw, reason):
+    from ragkit.generation import refusal_reason
+
+    assert refusal_reason(raw, _hits()) == reason
+
+
+def test_mock_batch_cli_end_to_end(tmp_path):
+    import json
+    import subprocess
+    import sys
+
+    output = tmp_path / 'MOCK.jsonl'
+    result = subprocess.run([
+        sys.executable, '-m', 'ragkit.cli', 'batch', '--mock',
+        '--questions', 'demo/questions.csv', '--run-id', 'MOCK-e2e',
+        '--output', str(output),
+    ], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    rows = [json.loads(line) for line in output.read_text(encoding='utf-8').splitlines()]
+    assert len(rows) == 2
+    assert not rows[0]['answer']['abstained']
+    assert rows[1]['answer']['abstained']
+    assert all(row['answer']['model'].startswith('mock') for row in rows)
+
+
+def test_failed_publish_cleans_temporary_file(tmp_path, monkeypatch):
+    import argparse
+    import os
+
+    from ragkit import cli
+
+    def fail(source, destination):
+        raise OSError('simulated publish failure')
+
+    monkeypatch.setattr(cli.os, 'rename' if os.name == 'nt' else 'link', fail)
+    output = tmp_path / 'result.jsonl'
+    args = argparse.Namespace(questions='demo/questions.csv', output=str(output),
+                              run_id='MOCK-failure', config=None, mock=True)
+    with pytest.raises(OSError, match='publish failure'):
+        cli.cmd_batch(args)
+    assert list(tmp_path.iterdir()) == []
