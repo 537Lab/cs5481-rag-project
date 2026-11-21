@@ -1182,3 +1182,68 @@ KN01–KN10 的空白判定表（只允许填「同意 / 不同意 / 该改」�
 **留给 T5 的一处排版（我没改，因为不是我写的行）**：main 上 `## T5 additional records` 的两行表格缺少
 `| --- |` 表头分隔行，GitHub 不会把它渲染成表格，只会显示成竖线原文。属于 #16 的内容，按所有权应由 T5 自己修。
 
+### 10.13 人工复核由 `ziqilin669` 本人落笔，正式门禁第一次打开（2026-11-21）
+
+本节写于 §10.12 之后。期间**有三个不是我推的提交落进本分支**，远端 head 从 `11470fb` 变成 `d39d658`；
+本地在它们存在期间一直停在 `11470fb`，所以 §10.12 那句「`REVIEWED_BY` 仍 0/10」在写完后就已过期（见 §10.14）。
+
+| 提交 | 账号 / 时间（GMT+8） | 内容 | 我的核验 |
+| --- | --- | --- | --- |
+| `da3c82d` | `ziqilin669` 18:52:01，GitHub 网页 "Add files via upload" | `eval/qa_set.csv` 的 10 行 `notes` 末尾追加 `REVIEWED_BY: ziqilin669 (2026-11-21)` | 逐行 csv 比对：36 行不变、`qid` 顺序不变、**除 `notes` 外没有任何一列被改**；去掉该 token 后与 `b2263d9` 的措辞一致，即 KN03 那处事实纠正没有被回退 |
+| `5eaf1e2` | `ziqilin669` 18:53:34，同上 | `eval/review/formal_qa_review.md` 签名区 4 行 | 行数 86 → 87，签名原文见下 |
+| `d39d658` | `ldk13856478627-cell` 20:25:32 | 把门禁测试从「关闭」翻成「打开」：`tests/test_eval_metrics.py` −21/+14、`tests/test_chunking.py`（**T2 拥有**）−11/+12、`formal_qa_review.md` −4/+5 | 实跑 + 逐条 diff，见下 |
+
+**这一步的性质要说清楚**：签名是 `ziqilin669` **本人用自己的账号把改好的文件传上 GitHub**，姓名是他自己的，
+不是任何人代填 —— 即我在 `issuecomment-7058643165` 里给出的两条合法路径中的 A 条（由本人直接改 csv）。
+`eval/review/formal_qa_review.md` 的 sign-off 现在写的是
+`Reviewer name(s) and date: ziqilin669, 2026-11-21`、`Items changed after review: none; KN07 kept as written`、
+`Remaining disagreements (adjudicated by a third member): none`，并把结尾那句「questions have not been read by a
+second human yet, so every row above is pending」改成「no row remains pending」。
+
+在 `d39d658` 的 detached worktree 上实跑（`.venv`，Python 3.13.5，用完 `worktree remove --force`，主工作树未动）：
+
+| 命令 | 结果 |
+| --- | --- |
+| `ruff check .` | All checks passed（`exit=0`） |
+| `python -m pytest -o addopts="" -q` | **186 passed / 2 skipped**（与 `11470fb` 完全同数：翻转是 1:1 替换用例，没有净减少覆盖） |
+| `python -m eval.metrics validate` | `exit=0`；`human review of unanswerable labels: 10/10 carry REVIEWED_BY`；23 个 `ABSENT_TOKENS` 仍按词边界判定不存在 |
+| `python -m eval.metrics validate --require-reviewed` | **`exit=0`** —— 本任务从头到尾 `exit=2` 的那道门，第一次真实打开 |
+
+两处我怀疑过、**但实测不成立**的问题，记为已排除而不是缺陷：
+
+1. `REVIEWED_BY` 被追加在 `ABSENT_TOKENS: helm; chart;` 这条分号列表的尾部，我怕它被当成第三个「缺失 token」。
+   实际解析结果 `absent_tokens=('helm','chart')`、`reviewed_by='ziqilin669 (2026-11-21)'`，未被污染；
+   起作用的是 `test_review_markers_parse_in_whatever_order_they_are_written` 覆盖的那个性质。
+2. 怕翻转顺手删掉负向对照。`test_require_reviewed_fails_until_a_human_signs_off` 仍在，仍用合成行证明
+   缺 token 时会 `raise QASetError`。
+
+一处**真实的覆盖面缩减，但文件不归我，交由 T2 判断**：`tests/test_chunking.py` 的
+`test_formal_refuses_before_creating_summary` 被改写成 `test_formal_creates_summary_after_review_gate_opens`，
+该文件内 `raises(QASetError)` 由 6 → 5，断言字面量 `"not on frozen inputs"` 由 1 → 0，也就是「未签名时
+`--formal` 必须拒绝」这条**经由分块实验入口**的断言消失了。逻辑上它是门禁打开的必然结果（已签名的提交集
+不再会拒绝，硬留这条测试反而要造假数据），机制层覆盖仍留在 `test_eval_metrics.py`。但这次改动是
+**T1 的账号、在 T4 的分支上、改 T2 拥有的测试文件**，三方里没有一个文件所有者，是否认可这种翻转应由 T2 自己说。
+
+### 10.14 我上一轮的登记有一条已经过期，以及本轮确认下来的合并口径
+
+**自我更正（不改动 §10.12 原文，只在此追加）**：§10.12 结尾的「本轮没有任何一条 `REVIEWED_BY` 被写入」，
+以及我在 PR #15 描述与 `issuecomment-7062218447` 里写的「`REVIEWED_BY` 出现 0 次」「`--require-reviewed`
+必然 `exit=2`」，**在发出的那一刻就已经不成立**：`da3c82d` 的签名上传是 18:52 GMT+8（10:52 UTC），
+我的评论发在 11:56 UTC、描述更新在 12:24 UTC。当时那些话对本分支 `11470fb` 是对的，对 PR 的真实 head 是错的。
+
+根因不是判断失误，是取证口径漏了一项：这轮所有命令都比的是 `origin/main` 与**本地** `HEAD`，
+唯独没有比 `origin/t4-k8s-qa-set`。别人可以往我的分支推提交（此前 `b2263d9`、`ac173a2` 已发生过两次），
+本地 head 因此会静默落后，而我引用的数字全是「本地 head 上的数字」。修法是把「fetch 之后先比对远端分支 head，
+再引用任何计数」固定成前置步骤；本轮已按此执行（`git merge --ff-only origin/t4-k8s-qa-set` 从 `11470fb` 进到 `d39d658`，
+没有为了追赶而制造我自己的提交）。
+
+**合并口径（经负责人确认，写在这里供解冲突时照做）**：下一次解 `docs/AI_USAGE.md` 时
+**只追加本分支自己的行，不动 main 那份重复块**。当前 main（`30e6e98`）上该缺陷依旧未修 ——
+一级标题在第 1 与第 96 行、共 195 行、`0ee7d5e → main` 的 numstat 仍是 `+195 / −98`（纯追加应为 `−0`）。
+也就是说本分支会暂时继承一份已知坏文档，但我不在自己的 PR 里删别人写的 98 行。
+
+**新的撞号事实**：main 的 `## 10` 现在是「T2 在冻结语料上重跑」，本分支的 `## 10` 是「T4 正式 Kubernetes 评测集」，
+同号两份内容。合并时按 §10.10 的同一做法：**T4 这一节整体改号为 `## 11`**（含 `### 10.x` 小节号与全部 `§10.x`
+自引用同步），T2 的第 10 节原文一字不动。`RUNLOG.md` 与 `docs/DEV_LOG.md` 的 main 侧仍是纯追加
+（`0ee7d5e → main` 各 `+47 / −0`、`+1 / −0`），可以安全解；与我的行零重叠这个判据本轮重新测过，仍成立。
+
