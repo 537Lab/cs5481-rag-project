@@ -189,5 +189,7 @@ T2 的 hit@k 仍是开发集上的检索，不是冻结语料上的正式实验�
 
 ## T5 additional records
 
+| 2026-11-21 | T5 demo guide | Codex | Added a classroom walkthrough, REAL-run prerequisites and synthetic qualitative failure examples. Agent executed `python -m demo.run` and an explicit MOCK batch export (2 records); no real LLM call or formal metric. | Human review and personal rerun Pending. |
+
 | 2026-11-20 | T5 | Codex | Added heuristic citation coverage, invalid-output refusal, batch I4 export, offline demo and tests on branch t5-generation-validation. Agent ran the checks documented in ANSWER_QUALITY.md. | User review and personal rerun Pending. No human review signatures or formal metrics supplied. |
 | 2026-11-20 | T5 follow-up | Codex | Added shared refusal diagnostics, MOCK batch subprocess coverage and atomic-publication failure cleanup tests, updated demo instructions. | Agent executed 37 T5/offline tests and 156 passing tests with test_store.py excluded (3 skipped). Full suite still crashes in Chroma outside sandbox. Human code review and personal rerun Pending. |
