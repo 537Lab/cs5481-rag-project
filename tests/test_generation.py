@@ -334,8 +334,53 @@ def test_mock_export_configuration_snapshot(tmp_path):
     assert config['llm']['model'] == row['answer']['model']
     assert config['embedding']['provider'] == 'MOCK'
     assert config['top_k'] == 10
+    assert config['min_score'] == 0.0
     assert config['qa_sha256'] == hashlib.sha256(Path(args.questions).read_bytes()).hexdigest()
     assert config['corpus_ref'] == 'tests/fixtures/manifest.json'
+
+
+def test_mock_snapshot_ignores_real_manifest_and_retrieval_config(tmp_path):
+    import argparse
+    import json
+
+    from ragkit.cli import cmd_batch
+
+    config = tmp_path / 'config.toml'
+    config.write_text('''
+[paths]
+raw_dir = "missing/raw"
+manifest = "missing/manifest.json"
+index_dir = "missing/index"
+[chunking]
+strategy = "paragraph"
+size = 321
+overlap = 12
+[embedding]
+provider = "api"
+local_model = "unused-local"
+local_dimension = 1
+api_model = "unused-api"
+api_dimension = 2
+[llm]
+model = "unused-llm"
+temperature = 0.9
+max_tokens = 99
+[retrieval]
+top_k = 77
+min_score = 0.85
+''', encoding='utf-8')
+    output = tmp_path / 'mock.jsonl'
+    args = argparse.Namespace(questions='demo/questions.csv', output=str(output),
+                              run_id='MOCK-independent', config=str(config), mock=True)
+
+    cmd_batch(args)
+
+    snapshot = json.loads(output.with_suffix('.config.json').read_text(encoding='utf-8'))
+    assert snapshot['mode'] == 'MOCK'
+    assert snapshot['strategy'] == 'fixed'
+    assert snapshot['top_k'] == 10
+    assert snapshot['min_score'] == 0.0
+    assert snapshot['corpus_ref'] == 'tests/fixtures/manifest.json'
 
 @pytest.mark.parametrize('response', [
     '[doc_a#0000]',
