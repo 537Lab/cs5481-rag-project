@@ -189,6 +189,18 @@ fixed 668 chunks、paragraph 775 chunks，全部偏移逐字匹配、出处及�
 T2 的 hit@k 仍是开发集上的检索，不是冻结语料上的正式实验；回答正确率至今为 0。
 贡献比例页须在全员开工后据实填写。
 
+## T5 full citation export (2026-11-22)
+
+Codex replaced the 200-character citation prefix with the complete cited retrieved
+chunk and added synthetic English/Chinese late-evidence regressions through I4
+and T4 loading. No contract, prompt, refusal gate, gold data or T1-T4 implementation
+was changed. Agent execution: full offline pytest 330 passed / 2 skipped; Ruff
+and diff checks passed. A separate two-question real local Ollama smoke run
+verified a complete 600-character citation and continued refusal behavior. Its
+raw output remains ignored. The original 36-answer grading artifact was checked
+unchanged by SHA-256; no grades or signatures were written. Human personal rerun,
+code review and semantic grading remain pending.
+
 ## T5 additional records
 
 | 2026-11-21 | T5 offline handoff smoke check | Codex | Added `demo.validate_export` to export two synthetic I4 answers, consume them with the existing T4 loader and verify MOCK provenance. Agent ran the command and Ruff successfully; no paid API or formal metrics. | Human review and personal rerun Pending. |

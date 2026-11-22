@@ -47,8 +47,6 @@ from ragkit.contracts import (
     RetrievedChunk,
 )
 
-QUOTE_LENGTH = 200
-
 SYSTEM_PROMPT = """You answer questions using ONLY the CONTEXT chunks provided below.
 
 Rules:
@@ -229,7 +227,8 @@ class AnswerGenerator:
             Citation(
                 chunk_id=cid,
                 doc_id=by_id[cid].doc_id,
-                quote=by_id[cid].text[:QUOTE_LENGTH].strip(),
+                # A prefix can omit the sentence supporting the cited claim.
+                quote=by_id[cid].text,
                 title=by_id[cid].title,
                 source_uri=by_id[cid].source_uri,
             )

@@ -11,7 +11,7 @@ frequencies or human grading records. See `demo/README.md` for the presentation.
 | One sentence has a valid citation; the next has none | Abstains with `uncovered_claim` | Conservative coverage can also reject an uncited heading or harmless formatting. |
 | Source says port 8080; answer says port 9090 with that source's real ID | May pass structural checks | Verbatim excerpts and valid IDs cannot detect contradiction. T4 must grade support independently. |
 | Model returns `NO_ANSWER` although retrieved evidence contains the answer | Abstains with `model_reported_insufficient_evidence` | Potential over-refusal; appropriateness requires the frozen QA and evidence, not this reason code alone. |
-| Supporting text occurs after the first 200 characters of a chunk | Exported excerpt may omit that evidence | The citation quote is a prefix, not a model-selected supporting span; inspect the full retrieved source for semantic grading. |
+| Supporting text occurs after the first 200 characters of a chunk | Full cited chunk is now exported | Older prefix-only artifacts can omit evidence. New exports retain the full source span; semantic support still requires grading. |
 
 No failure rate or answer correctness is inferred from these examples.
 
@@ -25,7 +25,7 @@ Retrieved chunks enter the existing grounded prompt. The model returns text with
 Citation IDs must belong to this retrieval turn and document IDs must match. Existing interfaces are preserved.
 
 ## Quote Verification
-Citation excerpts are copied from the first 200 characters of retrieved chunks. Verification requires a nonempty verbatim substring. This excerpt may omit the evidence supporting a particular claim.
+Citation quotes now preserve the complete retrieved chunk text, including boundary whitespace, instead of taking the first 200 characters. This prevents an export cutoff from dropping a supporting sentence later in the cited chunk. The quote is source text, not a model-generated or gold-selected span. Verification still checks only a nonempty verbatim substring; a full chunk can be irrelevant or contradict the answer. The CLI's short quote preview is separate from the full quote stored in Answer and JSONL.
 
 ## Claim-level Citation Coverage
 A conservative sentence/list heuristic checks for a citation in each text unit. This can reject headings and cannot detect unsupported clauses within one sentence. Citation punctuation is normalized before checking. Semantic support remains subject to human grading.
@@ -69,6 +69,30 @@ Follow-up validation: 38 generation/offline pipeline tests passed and Ruff passe
 Citation-only output now refuses with missing_answer_text. Chinese sentence boundaries are checked even without spaces, and trailing citations after Chinese punctuation are attached to their preceding sentence. This remains a structural heuristic, not semantic grading. Batch CSV input now rejects missing required headers, duplicate header names and extra row values before model construction.
 
 Validation: 44 generation/offline pipeline tests passed; Ruff passed. Existing Windows pyreadline cleanup warning persists. No paid API calls were made.
+
+## Full citation export validation (2026-11-22)
+
+Generation now exports the entire cited retrieved chunk rather than a 200-character
+prefix, retaining the existing Answer/Citation and I4 fields. No gold answer or
+gold quote is used to select or expand the exported text. Refusal gates and model
+prompts are unchanged. The tradeoff is larger answer artifacts and more source
+text for a judge to inspect; complete text still does not prove semantic support.
+The CLI's short display preview is not the JSONL quote.
+
+Synthetic English and Chinese regressions place the supporting sentence after
+character 200, preserve boundary whitespace, and check the generated Answer,
+nested JSONL and T4 loader. Agent execution on integrated main (including T3 PR
+#11) reported 330 passed and 2 skipped for the full offline suite; Ruff and
+`git diff --check` passed.
+
+A separate real local Ollama smoke run exported K01 and KN01 with new run ID
+`LOCAL-full-citations-smoke-20261122`. K01's exported citation matched all 600
+characters of the stored chunk; KN01 still abstained. These two questions-only
+inputs are smoke material, not a new gold set or formal evaluation. Raw output,
+sidecar and verification record are in `eval/results/raw/full-citations-20261122/`.
+The original 36-answer grading artifact's SHA-256 was checked unchanged. Existing
+grades and reviewer packets were not regenerated. No semantic grades or new
+correctness/abstention metrics were produced.
 
 ## PR #18 review fixes (2026-11-21)
 MOCK batch exports now build their provenance snapshot without loading the REAL configuration or reading its manifest. The MOCK snapshot records the synthetic pipeline's actual `min_score=0.0` instead of inheriting a value from `config.toml`. A regression test supplies a missing REAL manifest and a conflicting retrieval threshold, then verifies that the MOCK export still succeeds and records the fixture pipeline values. Validation after these fixes: 45 generation/offline pipeline tests passed, the suite excluding the known Windows Chroma store crash passed with 3 skips, and Ruff plus `git diff --check` passed. No paid API calls were made.
