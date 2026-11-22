@@ -11,7 +11,7 @@ python -m demo.validate_export
 python -m ragkit.cli batch --mock --questions demo/questions.csv --run-id MOCK-example --output eval/results/raw/MOCK-example.jsonl
 ```
 
-Synthetic fixtures and scripted responses require no API key. The demo displays a normal answer with its source excerpt and two refusal cases. Choose a new output path when repeating a batch run. Citation structure does not establish semantic support. Real LLM integration remains pending team API approval.
+Synthetic fixtures and scripted responses require no API key. The demo displays a normal answer with its source excerpt and two refusal cases. Choose a new output path when repeating a batch run. Citation structure does not establish semantic support. The commands above remain MOCK; the separately configured real local workflow and its execution record are described in T5_HANDOFF.md.
 
 `demo.validate_export` performs an offline T5-to-T4 handoff smoke check: it exports
 the two synthetic questions, reads them with T4's existing `load_outputs`, checks
