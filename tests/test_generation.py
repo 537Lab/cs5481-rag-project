@@ -20,6 +20,96 @@ from ragkit.generation import (
 )
 from tests.fakes import ScriptedLLM
 
+
+@pytest.mark.parametrize(('raw', 'reason'), [
+    ('NO_ANSWER', 'model_reported_insufficient_evidence'),
+    ('Alpha uses 8080. Beta is read-only [doc_a#0001].', 'uncovered_claim'),
+    ('kubectl get pods --all-namespaces', 'missing_citations'),
+    ('Alpha uses 8080 [doc_a#0000]', None),
+])
+def test_answer_diagnostics_preserve_gate_distinctions(raw, reason):
+    from dataclasses import asdict
+
+    from demo.inspect_answers import inspect_record
+
+    hits = _hits()
+    generator, _ = _generator(raw)
+    row = asdict(generator.generate('q', hits))
+    row.update(qid='MOCK-inspect', retrieved_chunk_ids=[hit.chunk.chunk_id for hit in hits])
+    chunks = {hit.chunk.chunk_id: hit.chunk for hit in hits}
+    result = inspect_record(row, chunks.get)
+    assert result['generation_gate'] == reason
+    assert result['citation_structure_valid'] is True
+    assert result['semantic_support'] == 'not_graded'
+    if reason == 'uncovered_claim':
+        assert result['uncovered_units'] == ['Alpha uses 8080.']
+    else:
+        assert result['uncovered_units'] == []
+
+
+def test_answer_diagnostics_do_not_guess_when_index_is_incomplete():
+    from dataclasses import asdict
+
+    from demo.inspect_answers import inspect_record
+
+    generator, _ = _generator('NO_ANSWER')
+    row = asdict(generator.generate('q', _hits()))
+    row.update(qid='MOCK-missing', retrieved_chunk_ids=['doc_a#0000'])
+    result = inspect_record(row, lambda cid: None)
+    assert result['missing_chunk_ids'] == ['doc_a#0000']
+    assert result['diagnostic_status'] == 'incomplete_index'
+    assert result['generation_gate'] is None
+    assert result['citation_structure_valid'] is None
+
+
+def test_local_demo_pins_local_service_and_restores_environment(tmp_path, monkeypatch, capsys):
+    import os
+    from types import SimpleNamespace
+
+    from demo import local_demo
+
+    monkeypatch.setenv('OPENAI_BASE_URL', 'https://example.test/v1')
+    monkeypatch.setenv('OPENAI_API_KEY', 'test-dummy-key')
+    monkeypatch.setattr(local_demo, 'load_settings', lambda config: SimpleNamespace(
+        embedding_provider='local', index_dir=tmp_path))
+    seen = []
+
+    class Pipeline:
+        store = SimpleNamespace(count=lambda: 2)
+
+        def ask(self, question):
+            seen.append(question)
+            raw = 'NO_ANSWER' if 'cheapest' in question else 'Alpha uses 8080 [doc_a#0000]'
+            return _generator(raw)[0].generate(question, _hits()), _hits()
+
+    def build(settings):
+        assert os.environ['OPENAI_BASE_URL'] == 'http://localhost:11434/v1'
+        assert os.environ['OPENAI_API_KEY'] == 'ollama'
+        assert os.environ['LLM_MODEL'] == 'qwen3:4b-instruct'
+        return Pipeline()
+
+    monkeypatch.setattr(local_demo, 'build_llm_pipeline', build)
+    assert local_demo.run_demo('unused.toml') == 0
+    assert seen == list(local_demo.QUESTIONS)
+    assert os.environ['OPENAI_BASE_URL'] == 'https://example.test/v1'
+    assert os.environ['OPENAI_API_KEY'] == 'test-dummy-key'
+    assert 'COMPLETE RETRIEVED CHUNK:' in capsys.readouterr().out
+
+
+def test_local_demo_rejects_api_embeddings_before_building_client(monkeypatch):
+    import os
+    from types import SimpleNamespace
+
+    from demo import local_demo
+
+    monkeypatch.setenv('OPENAI_BASE_URL', 'https://example.test/v1')
+    monkeypatch.setattr(local_demo, 'load_settings', lambda config: SimpleNamespace(
+        embedding_provider='api'))
+    monkeypatch.setattr(local_demo, 'build_llm_pipeline', lambda settings: pytest.fail('API call'))
+    with pytest.raises(ValueError, match='local embeddings'):
+        local_demo.run_demo('unused.toml')
+    assert os.environ['OPENAI_BASE_URL'] == 'https://example.test/v1'
+
 CHUNK_TEXTS = {
     "doc_a#0000": "The alpha service listens on port 8080.",
     "doc_a#0001": "The beta service is read-only.",

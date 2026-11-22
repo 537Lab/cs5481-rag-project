@@ -70,5 +70,43 @@ Citation-only output now refuses with missing_answer_text. Chinese sentence boun
 
 Validation: 44 generation/offline pipeline tests passed; Ruff passed. Existing Windows pyreadline cleanup warning persists. No paid API calls were made.
 
+## Reproducible generator diagnostics and live demo (2026-11-22)
+
+`demo.inspect_answers` reads existing I4 records through T4's loader and reuses
+T5's gate and citation-structure helpers against the matching stored chunks.
+It requires no gold, embedding query or model call, and produces no metrics or
+grades. Missing chunks are explicitly reported as an incomplete index rather
+than being misinterpreted as model refusal. See `demo/T5_HANDOFF.md` for usage.
+
+Inspection of the original local-model batch reproduced K06's two uncited
+sentences (`uncovered_claim`) and K24's uncited command (`missing_citations`).
+Those gates are enforcing the agreed citation policy. The other model-level
+`NO_ANSWER` cases cannot be called over-refusal solely from the reason code;
+the retrieved evidence and final semantic grading must be considered separately.
+No prompt tuning, retries or gate relaxation was introduced on this exposed QA.
+
+`demo.local_demo` provides the real two-question classroom entry point, pins the
+confirmed local model/endpoint, refuses API embeddings, shows both exported quotes
+and complete source chunks, and restores its temporary environment settings.
+The agent ran both real examples successfully. Full offline tests reported 335
+passed and 2 skipped; Ruff and diff checks passed. The 36-answer grading artifact
+was checked unchanged by SHA-256. This branch's tools are independent of the
+separate full-citation and runtime-configuration PRs.
+
+### Technical explanation for the report
+
+The generation stage receives the question and retrieved source chunks and asks
+the model to cite exact chunk identifiers for each claim. Empty retrieval,
+explicit insufficient-evidence output and failed citation/coverage checks produce
+an abstention while retaining raw model output for developer diagnosis. Source
+membership and verbatim quote checks establish traceability, not factual support.
+For example, a model can omit citations despite producing a plausible answer,
+or cite a real but irrelevant chunk. Human semantic grading therefore remains
+separate from structural checks. The prefix-only quote export additionally
+demonstrated that an answer artifact can omit evidence that was visible to the
+model; the complete-chunk export fix is tracked separately and must be identified
+by code version when comparing runs. Preserving original runs and explicit new
+run IDs prevents an engineering fix from silently changing the evaluation input.
+
 ## PR #18 review fixes (2026-11-21)
 MOCK batch exports now build their provenance snapshot without loading the REAL configuration or reading its manifest. The MOCK snapshot records the synthetic pipeline's actual `min_score=0.0` instead of inheriting a value from `config.toml`. A regression test supplies a missing REAL manifest and a conflicting retrieval threshold, then verifies that the MOCK export still succeeds and records the fixture pipeline values. Validation after these fixes: 45 generation/offline pipeline tests passed, the suite excluding the known Windows Chroma store crash passed with 3 skips, and Ruff plus `git diff --check` passed. No paid API calls were made.

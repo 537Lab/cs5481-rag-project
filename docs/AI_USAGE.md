@@ -189,6 +189,18 @@ fixed 668 chunks、paragraph 775 chunks，全部偏移逐字匹配、出处及�
 T2 的 hit@k 仍是开发集上的检索，不是冻结语料上的正式实验；回答正确率至今为 0。
 贡献比例页须在全员开工后据实填写。
 
+## T5 answer diagnosis and real-demo entry point (2026-11-22)
+
+Codex added `demo.inspect_answers` (per-answer technical diagnostics without
+model calls, gold or metric aggregation), `demo.local_demo` (two pinned-local
+Ollama examples), synthetic regressions and an operational/technical handoff.
+Agent execution reproduced the existing K06/K24 gate failures, resolved all
+source IDs in the 36-answer artifact, verified its original hash unchanged and
+ran the real local demonstration. Full offline pytest: 335 passed, 2 skipped;
+Ruff and diff checks passed. No prompt/gate tuning, new formal batch, human grades,
+signatures or metric implementation was introduced. Human personal rerun,
+non-author code review and T4 independent semantic grading remain pending.
+
 ## T5 additional records
 
 | 2026-11-21 | T5 offline handoff smoke check | Codex | Added `demo.validate_export` to export two synthetic I4 answers, consume them with the existing T4 loader and verify MOCK provenance. Agent ran the command and Ruff successfully; no paid API or formal metrics. | Human review and personal rerun Pending. |
