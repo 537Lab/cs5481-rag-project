@@ -92,7 +92,6 @@ T3 不写 prompt、不生成答案、不修改 gold、不实现第二套指标�
 7. 写入和查询均先按最大绝对值缩放、再做稳定单位归一化，避免极小/极大有限向量在 float32 cosine 中下溢、溢出或生成 NaN。归一化不改变余弦方向，异常后端距离会被拒绝，而不是继续传播成合法分数。已有污染向量不会自动修复，须重建。
 8. **合并后的多客户端读取修复（PR #27，2026-11-22）**：一个客户端调用 `clear()` 删除并重建 collection 后，另一预先打开的客户端原本仍持有旧 Chroma collection UUID，`count()` 会抛出 `chromadb.errors.NotFoundError`；此故障已由新增真实 Chroma 回归测试在 GitHub CI 复现（run 45028359710）。修复仅在读操作遇到 `NotFoundError` 时，在同名 collection 写锁内刷新 collection handle、重新检查策略绑定并重试一次；正常读取不新增 collection 查找。覆盖 `count()` / `get_chunk()` / `search()`，但不承诺多次读操作之间有数据库事务快照，也不代替对并发重建的协调。本项为修复后补丁，与 11-22 已冻结检索排名/分数实验相互独立。
 
-
 **维度保护不等于模型身份保护**：384 维索引与另一个不同维度的查询会被拒绝，但两个不同模型如果恰好同维，单凭维度无法识别。换 embedding 模型必须重建索引，不能混用。
 
 ### 向量化：`ragkit/embeddings.py`
