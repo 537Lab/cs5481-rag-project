@@ -231,6 +231,19 @@ raw output remains ignored. The original 36-answer grading artifact was checked
 unchanged by SHA-256; no grades or signatures were written. Human personal rerun,
 code review and semantic grading remain pending.
 
+## T5 unified delivery (2026-11-22)
+
+At the user's request to batch the work, Codex integrated exact T5 #22/#24/#25
+commits into the existing #26 branch via ordinary merges; original branches and
+the approved #25 commit were preserved. Conflicts retained both sets of added
+tests and T5 execution records. Agent execution: complete offline suite 340
+passed / 2 skipped, Ruff and enhanced MOCK handoff passed. A fresh local-model
+36-question engineering regression completed with full-chunk citations, matching
+input hashes and T4 loading/structure checks. The original grading baseline was
+verified unchanged by SHA-256. Raw regression/provenance stays ignored. No blind
+benchmark, human grades, signatures, agreement or correctness metric is claimed.
+Personal human rerun and non-author review of the unified scope remain pending.
+
 ## T5 additional records
 
 | 2026-11-22 | T5 I4 handoff integrity | Codex | Checked expected synthetic qids, answer/refusal states, citation IDs, config references and input hashes; added tampered-artifact regressions and refreshed T5 integration status. Agent executed the offline handoff and 130 generation/offline/T4 tests successfully; git diff --check passed. | Human review and personal rerun Pending. No real API calls or formal metrics. |

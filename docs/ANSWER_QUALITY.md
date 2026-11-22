@@ -173,5 +173,24 @@ The original 36-answer grading artifact's SHA-256 was checked unchanged. Existin
 grades and reviewer packets were not regenerated. No semantic grades or new
 correctness/abstention metrics were produced.
 
+## Unified delivery acceptance (2026-11-22)
+
+The delivery branch incorporates the exact #22/#24/#25 commits into #26 by
+ordinary merges, preserving the original #25 approved commit. Only T5 conflicts
+were resolved; both sides' added tests and execution records were retained.
+Current integration notes above replace the outdated pending-state descriptions
+from those branches. Unified offline validation: 340 passed / 2 skipped, Ruff
+passed, and the enhanced MOCK export/loader check passed.
+
+The agent also ran all 36 questions with fresh ID `LOCAL-full-citations-20261122`.
+T4 loading, qid completeness, configuration/input hashes and structural citation
+checks passed against the 668-chunk index. Every exported citation equalled its
+entire stored chunk, with evidence beyond character 200 retained. The original
+baseline remained unchanged by hash. New raw artifacts and model/runtime
+provenance stay ignored under `eval/results/raw/t5-unified-20261122/`.
+This engineering regression does not replace existing human-rating inputs and
+is not an independent blind benchmark. No semantic grades, agreement statistic
+or correctness/abstention metric is supplied by this T5 work.
+
 ## PR #18 review fixes (2026-11-21)
 MOCK batch exports now build their provenance snapshot without loading the REAL configuration or reading its manifest. The MOCK snapshot records the synthetic pipeline's actual `min_score=0.0` instead of inheriting a value from `config.toml`. A regression test supplies a missing REAL manifest and a conflicting retrieval threshold, then verifies that the MOCK export still succeeds and records the fixture pipeline values. Validation after these fixes: 45 generation/offline pipeline tests passed, the suite excluding the known Windows Chroma store crash passed with 3 skips, and Ruff plus `git diff --check` passed. No paid API calls were made.

@@ -1,5 +1,18 @@
 # T5 operational handoff
 
+## Unified review and merge
+
+PR #26 is the single delivery review for the work originally split across #22,
+#24, #25 and #26. It contains their exact commits through ordinary merges; the
+approved #25 source commit and review record remain intact. Review the final
+integrated head once. After a non-author member approves and merges #26, the
+overlapping PRs can be closed as superseded instead of merged a second time.
+Do not treat #25 approval alone as approval of the additional integrated scope.
+
+On the combined version, offline pytest reported 340 passed / 2 skipped and the
+enhanced `demo.validate_export` passed. The final acceptance record below and
+the PR description distinguish agent execution from any personal human rerun.
+
 ## Remaining ownership
 
 T5 owns generation, refusal gates, citation export and the runnable demo. T4
@@ -93,3 +106,20 @@ so the exported prefix and complete retrieved source were displayed separately.
 The unified branch now includes that fix. No new formal batch or grades were
 created by that validation. Full offline pytest: 335 passed, 2 skipped. Ruff passed. These commands
 were agent execution, not a personal human rerun or independent grading.
+
+## Unified acceptance and regression run
+
+After consolidating the four T5 changes, the agent ran the full offline suite:
+340 passed / 2 skipped, Ruff passed, and the enhanced MOCK handoff passed.
+The same frozen 36-question input was then exported under the fresh run ID
+`LOCAL-full-citations-20261122` using local Ollama. All qids and sidecar references
+resolved, QA/manifest hashes matched, and every citation exactly matched its
+complete stored chunk. The matching index contained 668 chunks. T4 loading and
+T5 structural checks passed; no human grades or correctness rates were produced.
+
+The new files are local under `eval/results/raw/t5-unified-20261122/`, alongside
+`run.json`, `acceptance.json` and per-answer `diagnostics.json`. This is an
+engineering regression on exposed QA, not an independent blind benchmark or a
+single-factor causal experiment. The original baseline's SHA-256 still matches
+its review-packet manifest. Continue current human ratings on that baseline;
+do not silently substitute the new full-quote artifact.
