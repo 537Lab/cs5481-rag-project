@@ -1,5 +1,16 @@
 # T5 Answer Quality
 
+## Integrated handoff validation (2026-11-22)
+
+`python -m demo.validate_export` now verifies the known synthetic question IDs,
+normal-answer/refusal states, citation membership in retrieved IDs, sidecar
+references and QA/manifest hashes after T4 loading. Tampered refusal state,
+configuration reference and QA hash are covered by negative regression tests.
+The offline command passed; generation, offline pipeline and T4 metric tests
+reported 130 passed in the agent's local environment. `git diff --check` passed.
+Ruff is unavailable in that environment; no new local lint success is claimed.
+This checks the scripted handoff and does not grade real answers or report metrics.
+
 ## Qualitative failure examples for the demo
 
 These are synthetic illustrations of the existing rules, not measured failure
@@ -36,7 +47,7 @@ The original Answer schema remains frozen. Refusals preserve raw model text wher
 ## JSONL Output Schema
 `python -m ragkit.cli batch --questions eval/qa_set.csv --run-id RUN --output eval/answers/RUN.jsonl`
 
-This REAL command requires an approved API configuration. Each line contains qid, nested answer (question, answer_text, abstained, citations, model, raw), retrieved_chunk_ids, run_id and config_ref. All input rows are validated before generation. Existing output paths are refused. Results are accumulated before opening the output. T4 load_outputs compatibility is tested using MOCK answers. config_ref points to the selected TOML, not an immutable experiment snapshot. Formal provenance integration remains Pending.
+This REAL command requires an approved API configuration. Each line contains qid, nested answer (question, answer_text, abstained, citations, model, raw), retrieved_chunk_ids, run_id and config_ref. All input rows are validated before generation. Existing output paths are refused. Results are accumulated before opening the output. T4 load_outputs compatibility is tested using MOCK answers. config_ref points to the per-run JSON sidecar, including effective settings and input hashes; it does not certify formal experiment approval.
 
 ## Demo Instructions
 From the repository root run `python -m demo.run` or `python -m ragkit.cli offline-demo`. Both use synthetic fixtures, require no key and display MOCK / OFFLINE. The output shows a valid answer, its source excerpt, an invented-ID refusal and an insufficient-evidence refusal. The scripted normal answer now selects a retrieved chunk containing 8080.
@@ -48,7 +59,7 @@ On 2026-11-20, tests/test_generation.py passed 19 tests, including invalid outpu
 Valid citations and verbatim excerpts do not establish factual support. The original regression test deliberately allows a structurally valid answer that contradicts its evidence. Coverage is heuristic. Provider exceptions are propagated. Batch output is buffered in memory, flushed to a temporary file and published atomically without overwriting an existing destination. Temporary files are cleaned when publication fails. Filesystem metadata durability across power loss is not guaranteed. MOCK retrieval is synthetic and provides no retrieval-quality evidence.
 
 ## Pending Integration Work
-GitHub browser identity ziqilin669 was verified and Issue #5 was self-assigned while remaining Open. Its live requirements were read. CLI authentication is separate from browser authentication. Obtain approved LLM configuration (C3), integrated frozen T1 corpus and T3 index, and frozen T4 QA (I2). Produce real I4 answers and have T4 perform independent grading. Review PR #15 separately, without merging its unmerged QA into this branch. Human review signatures remain Pending. Shared CLI changes require team review under CONTRIBUTING.
+As checked on 2026-11-22, PR #15 (T4 QA) and PR #21 (offline I4 handoff check) are merged. PR #11 (T3 retrieval hardening) remains open. Issue #5 remains Open. The integrated QA contains refusal-review signatures; this is distinct from grading generated answers. The user reports a free/local C3 choice, but provider, model and approval-record details have not yet been supplied to this agent. Verify those details and a matching index before any real call; produce real I4 answers only within the authorized scope, then hand them to T4 for independent grading. No real LLM output or answer-correctness result is claimed here. Shared CLI changes require team review under CONTRIBUTING.
 
 ## Additional validation on 2026-11-20
 The batch command now supports explicit `--mock` with a mandatory MOCK- run ID. Run `python -m ragkit.cli batch --mock --questions demo/questions.csv --run-id MOCK-example --output eval/results/raw/MOCK-example.jsonl`. The scripted synthetic pipeline is in demo/mock_pipeline.py. Two records were exported successfully to the ignored raw directory in an actual CLI run. Temporary-file writing followed by a no-overwrite atomic publication prevents partial output files and preserves concurrent-run safety. On Windows publication uses rename, which fails if the destination exists. On other platforms it uses a hard link. The earlier statement about nontransactional batch writes is superseded by this change.
