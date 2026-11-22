@@ -200,6 +200,47 @@ def test_fabricated_citation_is_rejected():
     assert verify_citations(answer, _hits())
 
 
+@pytest.mark.parametrize('padding', ['Operational background. ' * 20, '背景说明。' * 150])
+def test_citation_keeps_late_evidence_through_i4(tmp_path, monkeypatch, padding):
+    import argparse
+    import json
+    from dataclasses import asdict, replace
+
+    from eval.metrics import load_outputs
+    from ragkit import cli
+
+    # Synthetic source only: the supporting sentence follows the old cutoff.
+    text = '\n  ' + padding + '\nAlpha listens on port 8080.\n  '
+    assert text.index('8080') > 200
+    chunk = replace(_hits()[0].chunk, text=text, char_end=len(text))
+    hits = [RetrievedChunk(chunk=chunk, score=0.9, rank=1)]
+    generator, llm = _generator('Alpha listens on port 8080 [doc_a#0000]')
+    answer = generator.generate('Which port does alpha use?', hits)
+    assert not answer.abstained
+    assert answer.citations[0].quote == text
+    assert verify_citation_structure(answer, hits)
+    assert len(llm.calls) == 1
+    assert asdict(answer.citations[0]) == {
+        'chunk_id': chunk.chunk_id, 'doc_id': chunk.doc_id, 'quote': text,
+        'title': chunk.title, 'source_uri': chunk.source_uri,
+    }
+
+    class Pipeline:
+        def ask(self, question):
+            return generator.generate(question, hits), hits
+
+    monkeypatch.setattr(cli, 'build_llm_pipeline', lambda settings: Pipeline())
+    questions = tmp_path / 'questions.csv'
+    questions.write_text('qid,question\nMOCK-tail,Which port?\n', encoding='utf-8')
+    output = tmp_path / 'MOCK-tail.jsonl'
+    args = argparse.Namespace(questions=str(questions), output=str(output),
+                              run_id='MOCK-tail-evidence', config=None)
+    assert cli.cmd_batch(args) == 0
+    nested = json.loads(output.read_text(encoding='utf-8'))
+    assert nested['answer']['citations'][0]['quote'] == text
+    assert load_outputs(output)['MOCK-tail']['citations'][0]['quote'] == text
+
+
 def test_answer_without_any_citation_is_rejected():
     generator, _llm = _generator("Alpha uses port 8080.")
     assert generator.generate("Which port?", _hits()).abstained
