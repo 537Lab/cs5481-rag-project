@@ -1356,3 +1356,66 @@ main 的 T2 段逐字连续存在；main 的 195 行是 `docs/AI_USAGE.md` 的�
 
 本轮登记自身会产生新的 head，它的云端结论只应在新 head 的 Checks 页面上读，不在此自指追记。
 
+## 12. T2 正式分块对比（2026-11-22，Cursor 编码 agent 执行，组员尚未重跑）
+
+分支 `t2-chunking-formal`，从已合并 PR #15 的 `origin/main` 拉开。解释器是仓库 `.venv` 里的 Python 3.12.10。命令都在仓库根目录执行。没有调用 LLM。
+
+PR #15 已经把正式 QA 合进 `eval/qa_set.csv`，10 道 unanswerable 都有 `REVIEWED_BY`。`--formal` 这次退出码 0。汇总提交在 `eval/results/summary/chunking_comparison/`。`run.md` 里的 executor 是本机 git 用户名 `null1024-ws`；实际敲命令的是编码 agent。
+
+`2026-11-22T02:12:00+00:00` 先跑过一轮，汇总表与下面相同，当时 `metrics.json` 还没有分歧列表。补上这个字段后重跑，当前文件的 `generated_at` 是 `2026-11-22T02:13:25+00:00`。
+
+```
+$ python -m ruff check .
+All checks passed!
+
+$ python -m pytest -q
+195 passed, 2 skipped
+
+$ python -m eval.chunking_experiment --formal
+exit=0
+==============================================================================
+[FORMAL] chunking comparison
+==============================================================================
+corpus       : cs5481-k8s-v135-16docs-36fd3eedf33f@bddfe3601885 (frozen=True)
+qa set       : eval/qa_set.csv@b01b97fbdf2a
+qa status    : formal Kubernetes QA set (interface I2), gold quotes verbatim in the frozen corpus snapshot
+held constant: size=600 overlap=80 top_k=3 min_coverage=0.5 embedding=local:all-MiniLM-L6-v2
+
+strategy      chunks    min    max     mean  hit@1          hit@3
+fixed            668    147    600 587.5793  8/26 (0.3077)  18/26 (0.6923)
+paragraph        775     81    683 515.7768  10/26 (0.3846) 17/26 (0.6538)
+
+disagreements: 21
+  K02 hit@3 gold=[504, 620] fixed=hit(rank=2), paragraph=miss(rank=None)
+  K05 hit@3 gold=[8917, 8995] fixed=hit(rank=3), paragraph=miss(rank=None)
+  K06 hit@1 gold=[1249, 1342] fixed=miss(rank=None), paragraph=hit(rank=1)
+  K06 hit@3 gold=[1249, 1342] fixed=miss(rank=None), paragraph=hit(rank=1)
+  K07 hit@1 gold=[20169, 20252] fixed=miss(rank=3), paragraph=hit(rank=1)
+  K08 hit@1 gold=[11251, 11345] fixed=hit(rank=1), paragraph=miss(rank=2)
+  K10 hit@1 gold=[801, 886] fixed=hit(rank=1), paragraph=miss(rank=2)
+  K11 hit@1 gold=[28830, 28921] fixed=hit(rank=1), paragraph=miss(rank=2)
+  K12 hit@3 gold=[8626, 8727] fixed=miss(rank=None), paragraph=hit(rank=2)
+  K14 hit@3 gold=[6087, 6166] fixed=hit(rank=2), paragraph=miss(rank=None)
+  K16 hit@1 gold=[1377, 1458] fixed=miss(rank=3), paragraph=hit(rank=1)
+  K18 hit@1 gold=[15308, 15401] fixed=miss(rank=None), paragraph=hit(rank=1)
+  K18 hit@3 gold=[15308, 15401] fixed=miss(rank=None), paragraph=hit(rank=1)
+  K19 hit@1 gold=[23886, 23971] fixed=miss(rank=None), paragraph=hit(rank=1)
+  K19 hit@3 gold=[23886, 23971] fixed=miss(rank=None), paragraph=hit(rank=1)
+  K22 hit@1 gold=[29475, 29593] fixed=miss(rank=2), paragraph=hit(rank=1)
+  K23 hit@1 gold=[1554, 1608] fixed=hit(rank=1), paragraph=miss(rank=None)
+  K23 hit@3 gold=[1554, 1608] fixed=hit(rank=1), paragraph=miss(rank=None)
+  K24 hit@1 gold=[5923, 6002] fixed=miss(rank=3), paragraph=hit(rank=1)
+  K26 hit@1 gold=[932, 1030] fixed=hit(rank=1), paragraph=miss(rank=None)
+  K26 hit@3 gold=[932, 1030] fixed=hit(rank=1), paragraph=miss(rank=None)
+
+not applicable: retrieval-only comparison. hit@k is retrieval_hit_rate(); it is not answer correctness
+wrote eval/results/summary/chunking_comparison/config.json
+wrote eval/results/summary/chunking_comparison/metrics.json
+wrote eval/results/summary/chunking_comparison/run.md
+wrote eval/results/summary/chunking_comparison/hit_rates.svg
+```
+
+`ruff check .` 与 `pytest` 是分歧列表和正式目录保护测试改完之后再跑的：`ruff` 通过，`pytest` **195 passed / 2 skipped**。组员本人尚未重跑。
+
+同日稍后只重画了 `hit_rates.svg`。原先 hit@1 的数字从 x=244 画起，盖住了 x=292 的 hit@3 柱。现在每列先留 96px 的柱槽，数字写在柱槽右边。画布从 460 加到 596。数字仍是上面这张表，没有重跑检索，`generated_at` 仍是 `2026-11-22T02:13:25+00:00`。
+
