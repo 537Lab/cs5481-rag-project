@@ -355,7 +355,6 @@ def test_preopened_client_writes_after_other_client_clear(tmp_path, chunks):
     assert first.count() == 0
 
 
-
 def test_preopened_client_reads_after_other_client_rebuild(tmp_path, chunks):
     """Read clients should track collection replacement, not stale collection UUIDs."""
     first = ChromaStore(tmp_path, "rebound_readers")
@@ -372,7 +371,6 @@ def test_preopened_client_reads_after_other_client_rebuild(tmp_path, chunks):
     assert second.count() == 1
     assert second.get_chunk(chunks[1].chunk_id) == chunks[1]
     assert second.search([0, 1], 1)[0].chunk == chunks[1]
-
 
 
 @pytest.mark.parametrize("scale", [1e-50, 1e-30, 1e20, 1e308, 5e-324])
