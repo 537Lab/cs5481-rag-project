@@ -109,6 +109,37 @@ def test_local_demo_rejects_api_embeddings_before_building_client(monkeypatch):
     with pytest.raises(ValueError, match='local embeddings'):
         local_demo.run_demo('unused.toml')
     assert os.environ['OPENAI_BASE_URL'] == 'https://example.test/v1'
+@pytest.mark.parametrize('corruption', ['refusal', 'config_ref', 'qa_hash'])
+def test_handoff_rejects_corrupted_export(tmp_path, corruption):
+    import argparse
+    import json
+
+    from demo.validate_export import validate_export
+    from ragkit.cli import cmd_batch
+
+    output = tmp_path / 'MOCK-handoff.jsonl'
+    cmd_batch(argparse.Namespace(
+        questions='demo/questions.csv', output=str(output),
+        run_id='MOCK-handoff', config=None, mock=True,
+    ))
+    validate_export(output)
+    if corruption == 'qa_hash':
+        snapshot_path = output.with_suffix('.config.json')
+        snapshot = json.loads(snapshot_path.read_text(encoding='utf-8'))
+        snapshot['qa_sha256'] = '0' * 64
+        snapshot_path.write_text(json.dumps(snapshot), encoding='utf-8')
+        error = 'input hash mismatch'
+    else:
+        records = [json.loads(line) for line in output.read_text(encoding='utf-8').splitlines()]
+        if corruption == 'refusal':
+            records[1]['answer']['abstained'] = False
+            error = 'Scripted refusal'
+        else:
+            records[0]['config_ref'] = 'missing.config.json'
+            error = 'Broken configuration reference'
+        output.write_text('\n'.join(json.dumps(row) for row in records) + '\n', encoding='utf-8')
+    with pytest.raises(RuntimeError, match=error):
+        validate_export(output)
 
 CHUNK_TEXTS = {
     "doc_a#0000": "The alpha service listens on port 8080.",
