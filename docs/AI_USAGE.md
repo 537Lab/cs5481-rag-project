@@ -189,6 +189,8 @@ T2 的 hit@k 仍是开发集上的检索，不是冻结语料上的正式实验�
 
 ## T5 additional records
 
+| 2026-11-22 | T5 I4 handoff integrity | Codex | Checked expected synthetic qids, answer/refusal states, citation IDs, config references and input hashes; added tampered-artifact regressions and refreshed T5 integration status. Agent executed the offline handoff and 130 generation/offline/T4 tests successfully; git diff --check passed. | Human review and personal rerun Pending. No real API calls or formal metrics. |
+
 | 2026-11-21 | T5 offline handoff smoke check | Codex | Added `demo.validate_export` to export two synthetic I4 answers, consume them with the existing T4 loader and verify MOCK provenance. Agent ran the command and Ruff successfully; no paid API or formal metrics. | Human review and personal rerun Pending. |
 
 | 2026-11-21 | T5 demo guide | Codex | Added a classroom walkthrough, REAL-run prerequisites and synthetic qualitative failure examples. Agent executed `python -m demo.run` and an explicit MOCK batch export (2 records); no real LLM call or formal metric. | Human review and personal rerun Pending. |

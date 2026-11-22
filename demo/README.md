@@ -12,7 +12,8 @@ Synthetic fixtures and scripted responses require no API key. The demo displays 
 
 `demo.validate_export` performs an offline T5-to-T4 handoff smoke check: it exports
 the two synthetic questions, reads them with T4's existing `load_outputs`, checks
-the MOCK provenance settings, and removes its temporary artifacts on exit. It
+the expected question IDs, scripted answer/refusal states, retrieved citation IDs,
+configuration references and input hashes, and removes its temporary artifacts on exit. It
 does not calculate metrics or use the formal QA dataset.
 
 ## Classroom walkthrough (MOCK, about three minutes)
