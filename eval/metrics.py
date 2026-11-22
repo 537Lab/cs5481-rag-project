@@ -82,8 +82,11 @@ WHERE RESULTS GO
 Per-item output belongs to the gitignored ``eval/results/raw/``. Only real,
 reproducible aggregates belong in ``eval/results/summary/`` (see
 ``eval/results/README.md``): ``--summary-dir`` refuses MOCK runs and refuses
-anything that is not on frozen inputs, because ``CORPUS_V0`` plus the current
-``qa_set.csv`` (``QA_SET_STATUS``) are development inputs, not the formal set.
+anything that is not on frozen inputs. Two QA files are committed: the formal
+Kubernetes set at ``eval/qa_set.csv`` (interface I2, the default for every
+command) and the Wikipedia development set at ``eval/qa_set_dev_v0.csv``.
+``qa_set_status`` is derived from which file it is and what its rows cite - see
+``qa_set_status()`` - so a development number cannot be relabelled by a flag.
 """
 
 from __future__ import annotations
@@ -92,6 +95,7 @@ import argparse
 import csv
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
@@ -122,17 +126,36 @@ CATEGORIES = ("answerable", "unanswerable")
 ABSENT_MARKER = "ABSENT_TOKENS:"
 REVIEW_MARKER = "REVIEWED_BY:"
 DEFAULT_QA = ROOT / "eval" / "qa_set.csv"
+# The 35 items written against CORPUS_V0 keep their own file instead of their
+# old path: T2/T3/T5 can still exercise plumbing on them without an API key,
+# while the single I2 path every tool reads by default now carries the formal
+# Kubernetes set for the frozen snapshot.
+DEV_QA = ROOT / "eval" / "qa_set_dev_v0.csv"
 ANSWERS_DIR = ROOT / "eval" / "answers"
 RAW_RESULTS_DIR = ROOT / "eval" / "results" / "raw"
 SUMMARY_DIR = ROOT / "eval" / "results" / "summary"
 FROZEN_MANIFEST = ROOT / "data" / "raw" / "frozen_manifest.json"
 ARTIFACT_SUFFIXES = (".jsonl", ".ndjson", ".json")
 PENDING_CORRECTNESS = "pending human grading (no --grades file supplied)"
-# The 35 items now in qa_set.csv were written against CORPUS_V0, the four
-# documents already in the repository. They are the development set: usable for
-# code, tests and plumbing, not quotable as the formal evaluation until the
-# frozen corpus (interface I1) lands and the gold quotes are re-validated.
-QA_SET_STATUS = "development set on CORPUS_V0, not the frozen formal QA set"
+# Which set a file holds is a property of the file, so it is written down per
+# path rather than as one global constant. `qa_set_status()` appends what the
+# rows themselves say (corpus binding, pending review) to these stems.
+QA_SET_STATUS_BY_FILE = {
+    "eval/qa_set.csv": (
+        "formal Kubernetes QA set (interface I2), gold quotes verbatim in the "
+        "frozen corpus snapshot"
+    ),
+    "eval/qa_set_dev_v0.csv": (
+        "development QA set on the four CORPUS_V0 Wikipedia documents, not the "
+        "formal evaluation set"
+    ),
+}
+QA_SET_STATUS_OTHER = "ad-hoc QA file, not a team artifact"
+REVIEW_TABLE = ROOT / "eval" / "review" / "formal_qa_review.md"
+# Suffixes that keep a declared token an occurrence of the same word. Chosen
+# small on purpose: it covers English inflection, not compound words, so
+# `fee` still does not match `feedback` while `gpu` still matches `gpus`.
+INFLECTION_SUFFIX = r"(?:s|es|ed|d|ing|ly|er|ers|est)?"
 # I4 calls the field `retrieved_chunk_ids`; `retrieved_ids` stays accepted so the
 # records already covered by the first round of tests keep working.
 RETRIEVED_KEYS = ("retrieved_chunk_ids", "retrieved_ids")
@@ -230,6 +253,30 @@ def _item_from_row(row: dict[str, str], line_number: int, path: Path) -> QAItem:
     return QAItem(**values)
 
 
+def token_occurs(token: str, corpus: str) -> bool:
+    """Does ``token`` occur in ``corpus`` as itself, or only inside a longer word?
+
+    A bare substring test reports ``fee`` as present because of ``feedback``, so
+    whoever writes a refusal item has to dodge accidental collisions instead of
+    stating the fact. Anchoring the start at a word boundary removes that whole
+    class of false hits. The end is deliberately looser: a declared word also
+    counts when the corpus inflects it (``hallucination`` is present in
+    ``hallucinations``), because a corpus that discusses hallucinations can very
+    well answer a question about them. Whitespace inside a phrase is matched as
+    a run, so a line break between two words cannot hide an occurrence. Every
+    choice here can only make an absence claim harder to keep, never easier.
+    """
+    parts = [re.escape(part) for part in token.split()]
+    if not parts:
+        return False
+    pattern = r"\s+".join(parts)
+    if parts[0][:1].isalnum() or parts[0][0] == "_":
+        pattern = rf"\b{pattern}"
+    if parts[-1][-1:].isalnum() or parts[-1][-1] == "_":
+        pattern = rf"{pattern}{INFLECTION_SUFFIX}\b"
+    return re.search(pattern, corpus) is not None
+
+
 def unreviewed_items(items: Sequence[QAItem]) -> list[str]:
     """Unanswerable items no group member has attested as genuinely unanswerable.
 
@@ -264,7 +311,7 @@ def validate_qa_set(
         if not item.absent_tokens:
             errors.append(f"{item.qid}: unanswerable but declares no ABSENT_TOKENS")
         for token in item.absent_tokens:
-            if token in corpus:
+            if token_occurs(token, corpus):
                 errors.append(f"{item.qid}: token {token!r} occurs in the corpus")
     unreviewed = unreviewed_items(items)
     if require_reviewed and unreviewed:
@@ -932,6 +979,29 @@ def _sha256(path: str | Path) -> str:
     return hashlib.sha256(file_path.read_bytes()).hexdigest()[:12]
 
 
+def _frozen_payload() -> dict[str, object]:
+    """Interface I1 as a dict, or ``{}`` when nothing is frozen yet."""
+    if not FROZEN_MANIFEST.is_file():
+        return {}
+    try:
+        payload = json.loads(FROZEN_MANIFEST.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def frozen_doc_ids() -> frozenset[str]:
+    """Document ids the frozen snapshot declares; empty before I1 lands."""
+    documents = _frozen_payload().get("documents")
+    if not isinstance(documents, list):
+        return frozenset()
+    return frozenset(
+        str(doc["doc_id"])
+        for doc in documents
+        if isinstance(doc, dict) and doc.get("doc_id")
+    )
+
+
 def _corpus_ref(settings: Settings) -> dict[str, object]:
     """Which corpus snapshot these numbers belong to (interface I1 / I5).
 
@@ -941,24 +1011,61 @@ def _corpus_ref(settings: Settings) -> dict[str, object]:
     """
     frozen = FROZEN_MANIFEST.is_file()
     ref = FROZEN_MANIFEST if frozen else settings.manifest
-    corpus_id = None
-    if frozen:
-        try:
-            payload = json.loads(FROZEN_MANIFEST.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            payload = None
-        if isinstance(payload, dict):
-            corpus_id = payload.get("corpus_id")
+    corpus_id = _frozen_payload().get("corpus_id")
     label = str(corpus_id) if corpus_id else _relative(ref)
     return {"corpus_ref": f"{label}@{_sha256(ref)}", "corpus_frozen": frozen}
 
 
-def _qa_ref(qa_path: str | Path) -> dict[str, object]:
-    """Which QA file, and whether it is the frozen formal set or the dev set."""
-    path = Path(qa_path)
-    committed = path.resolve() == DEFAULT_QA.resolve()
-    status = QA_SET_STATUS if committed else "ad-hoc QA file, not a team artifact"
-    return {"qa_set_ref": f"{_relative(path)}@{_sha256(path)}", "qa_set_status": status}
+def qa_corpus_binding(items: Sequence[QAItem]) -> dict[str, object]:
+    """Which documents a QA set cites, and whether the snapshot lists them.
+
+    A gold quote that resolves in ``data/raw/`` proves the quote is verbatim,
+    not that it belongs to the corpus version the run claims to describe: the
+    file could have been swapped under it. Checking the cited ``doc_id`` values
+    against ``frozen_manifest.json`` turns that claim into a machine test.
+    """
+    cited = sorted({item.evidence_doc_id for item in items if item.evidence_doc_id})
+    frozen = frozen_doc_ids()
+    outside = [doc_id for doc_id in cited if doc_id not in frozen]
+    return {
+        "qa_cited_docs": cited,
+        "qa_cited_doc_count": len(cited),
+        "qa_docs_outside_frozen_snapshot": outside,
+        "qa_corpus_binding_verified": bool(frozen) and not outside,
+    }
+
+
+def qa_set_status(qa_path: str | Path = DEFAULT_QA, items: Sequence[QAItem] = ()) -> str:
+    """What this QA file is, assembled from the file and its rows.
+
+    One global constant cannot describe two committed sets, and a status copied
+    from a flag is a claim nobody verified. The path fixes which set it is; the
+    rows then fix whether their citations land inside the frozen snapshot and
+    whether a human has signed off every refusal label.
+    """
+    label = _relative(qa_path)
+    stem = QA_SET_STATUS_BY_FILE.get(label, QA_SET_STATUS_OTHER)
+    if not items:
+        return stem
+    parts = [stem]
+    binding = qa_corpus_binding(items)
+    if not binding["qa_corpus_binding_verified"]:
+        outside = binding["qa_docs_outside_frozen_snapshot"]
+        parts.append(
+            "frozen snapshot not found" if not outside else f"cites non-snapshot doc(s): {outside}"
+        )
+    pending = len(unreviewed_items(items))
+    if pending:
+        parts.append(f"{pending} refusal label(s) awaiting a human REVIEWED_BY")
+    return "; ".join(parts)
+
+
+def _qa_ref(qa_path: str | Path, items: Sequence[QAItem] = ()) -> dict[str, object]:
+    """Which QA file, what it is, and whether its gold binds to the snapshot."""
+    ref = {"qa_set_ref": f"{_relative(qa_path)}@{_sha256(qa_path)}"}
+    if items:
+        return ref | {"qa_set_status": qa_set_status(qa_path, items)} | qa_corpus_binding(items)
+    return ref | {"qa_set_status": qa_set_status(qa_path)}
 
 
 def _config_snapshot(
@@ -987,21 +1094,39 @@ def _config_snapshot(
         "python": sys.version.split()[0],
         "qa_items": len(items),
         **_corpus_ref(settings),
-        **_qa_ref(qa_path),
+        **_qa_ref(qa_path, items),
     }
 
 
-def assert_formal_inputs(settings: Settings, items: Sequence[QAItem]) -> None:
+def assert_formal_inputs(
+    settings: Settings, items: Sequence[QAItem], qa_path: str | Path = DEFAULT_QA
+) -> None:
     """Refuse to publish a run as formal while the inputs are still moving.
 
-    The flag is an assertion by the person running it; the two checks below are
-    what this machine can verify. They are deliberately not a proof that the QA
-    set was reviewed by the whole group - that lives in the PR.
+    The flag is an assertion by the person running it; the checks below are
+    what this machine can verify: the I1 snapshot exists, the gold quotes bind
+    to documents that snapshot lists, the set read is the team artifact at the
+    I2 path rather than the development file, and every refusal label carries a
+    human attestation. They are deliberately not a proof that the QA set was
+    reviewed by the whole group - that lives in the PR.
     """
     problems: list[str] = []
+    label = _relative(qa_path)
     if not FROZEN_MANIFEST.is_file():
         problems.append(
             f"{_relative(FROZEN_MANIFEST)} is missing: the I1 corpus snapshot is not frozen yet"
+        )
+    if label not in QA_SET_STATUS_BY_FILE:
+        problems.append(
+            f"{label} is not a committed team QA artifact; the formal set "
+            "lives at the single I2 path eval/qa_set.csv"
+        )
+    elif label != _relative(DEFAULT_QA):
+        problems.append(f"{label} is the development set; a formal run reads eval/qa_set.csv")
+    elif not qa_corpus_binding(items)["qa_corpus_binding_verified"]:
+        problems.append(
+            "gold quotes do not bind to the frozen snapshot: "
+            f"{qa_corpus_binding(items)['qa_docs_outside_frozen_snapshot'] or 'no doc ids listed'}"
         )
     unreviewed = unreviewed_items(items)
     if unreviewed:
@@ -1013,6 +1138,7 @@ def assert_formal_inputs(settings: Settings, items: Sequence[QAItem]) -> None:
             "--formal refused, this run is not on frozen inputs yet:\n"
             + "\n".join(f"  - {problem}" for problem in problems)
             + "\nDevelopment numbers belong in eval/results/raw/ via --out, not in summary/."
+            + f"\nSign the refusal labels in {_relative(REVIEW_TABLE)} first."
         )
 
 
@@ -1113,7 +1239,7 @@ def _summary_gate(args: argparse.Namespace, settings: Settings, items: Sequence[
                 "--summary-dir needs --formal: development numbers stay in "
                 "eval/results/raw/ (see eval/results/README.md)"
             )
-        assert_formal_inputs(settings, items)
+        assert_formal_inputs(settings, items, qa_path=args.qa)
 
 
 def _write_summary_if_asked(args: argparse.Namespace, result: EvalResult) -> None:
@@ -1148,18 +1274,30 @@ def cmd_validate(args: argparse.Namespace) -> int:
         print(f"  {item.qid} {span.doc_id} chars {span.char_start}-{span.char_end}")
     print(f"unanswerable absence checks: "
           f"{sum(len(item.absent_tokens) for item in unanswerable)} tokens "
-          "confirmed absent from the corpus - a NECESSARY condition only, the absence "
-          "of a word does not prove the corpus cannot answer the question")
+          "confirmed absent from the corpus as whole words - a NECESSARY condition "
+          "only, the absence of a word does not prove the corpus cannot answer the question")
     unreviewed = unreviewed_items(items)
     print(f"human review of unanswerable labels: "
           f"{len(unanswerable) - len(unreviewed)}/{len(unanswerable)} carry REVIEWED_BY"
           + (f" (pending: {', '.join(unreviewed)})" if unreviewed else ""))
+    if unreviewed and _relative(qa_path) == _relative(DEFAULT_QA) and REVIEW_TABLE.is_file():
+        print(f"  checklist for the reviewers: {_relative(REVIEW_TABLE)}")
+    binding = qa_corpus_binding(items)
+    frozen_ids = frozen_doc_ids()
+    print(f"corpus binding: {binding['qa_cited_doc_count']} doc(s) cited, "
+          f"verified against the frozen snapshot: {binding['qa_corpus_binding_verified']}"
+          + (f" (outside: {binding['qa_docs_outside_frozen_snapshot']})"
+             if binding["qa_docs_outside_frozen_snapshot"] else ""))
+    if frozen_ids:
+        uncovered = sorted(frozen_ids - set(binding["qa_cited_docs"]))
+        print(f"frozen documents with no answerable item ({len(uncovered)}/{len(frozen_ids)}): "
+              f"{', '.join(uncovered) if uncovered else 'none'}")
     frozen_note = (
         "present" if FROZEN_MANIFEST.is_file() else f"absent: {_relative(FROZEN_MANIFEST)}"
     )
     print(f"corpus checked against: {_relative(args.manifest)}@{_sha256(args.manifest)}; "
           f"frozen snapshot (I1) {frozen_note}")
-    print(f"QA set status: {_qa_ref(qa_path)['qa_set_status']}")
+    print(f"QA set status: {qa_set_status(qa_path, items)}")
     return 0
 
 

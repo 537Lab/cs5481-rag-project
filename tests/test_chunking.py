@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -253,18 +254,19 @@ def test_development_destination_does_not_create_summary(tmp_path):
     assert not summary.exists()
 
 
-def test_formal_refuses_before_creating_summary(tmp_path):
+def test_formal_creates_summary_after_review_gate_opens(tmp_path):
     summary = tmp_path / "summary" / "chunking_comparison"
-    with pytest.raises(QASetError, match="not on frozen inputs"):
-        resolve_destination(
-            formal=True,
-            settings=load_settings(),
-            items=load_qa(),
-            summary_dir=summary,
-            raw_dir=tmp_path / "raw",
-        )
-    assert not summary.exists()
-    assert not (tmp_path / "raw").exists()
+    raw = tmp_path / "raw"
+    destination = resolve_destination(
+        formal=True,
+        settings=load_settings(),
+        items=load_qa(),
+        summary_dir=summary,
+        raw_dir=raw,
+    )
+    assert destination == summary
+    assert summary.is_dir()
+    assert not raw.exists()
 
 
 def test_summary_dir_without_formal_is_refused(tmp_path):
@@ -330,7 +332,9 @@ def test_payload_rejects_strategies_that_do_not_share_parameters():
 def test_development_out_cannot_land_inside_summary():
     relative = Path("eval") / "results" / "summary" / "chunking_comparison"
     nested = Path("eval") / "results" / "raw" / ".." / "summary" / "chunking_comparison"
+    published = ROOT / "eval" / "results" / "summary" / "chunking_comparison"
     for target in (relative, nested, SUMMARY_DIR / "chunking_comparison"):
+        before = _snapshot(published)
         with pytest.raises(QASetError, match="cannot write a development run"):
             resolve_destination(
                 formal=False,
@@ -339,9 +343,10 @@ def test_development_out_cannot_land_inside_summary():
                 summary_dir=SUMMARY_DIR / "chunking_comparison",
                 raw_dir=target,
             )
-        assert not (ROOT / "eval" / "results" / "summary" / "chunking_comparison").exists()
+        assert _snapshot(published) == before
+    before = _snapshot(published)
     assert main(["--out", str(relative)]) == 2
-    assert not (ROOT / relative).exists()
+    assert _snapshot(published) == before
 
 
 def test_development_out_rejects_a_symlink_into_summary(tmp_path):
@@ -369,6 +374,16 @@ def test_development_out_rejects_a_symlink_into_summary(tmp_path):
         )
 
 
+def _snapshot(directory: Path) -> list[tuple[str, bytes]]:
+    if not directory.exists():
+        return []
+    return sorted(
+        (path.relative_to(directory).as_posix(), path.read_bytes())
+        for path in directory.rglob("*")
+        if path.is_file()
+    )
+
+
 def test_formal_rejects_dev_and_arbitrary_qa_paths(tmp_path):
     summary = tmp_path / "summary" / "chunking_comparison"
     body = DEFAULT_QA.read_text(encoding="utf-8")
@@ -385,8 +400,31 @@ def test_formal_rejects_dev_and_arbitrary_qa_paths(tmp_path):
                 qa_path=qa_file,
             )
         assert not summary.exists()
+    summary = SUMMARY_DIR / "chunking_comparison"
+    before = _snapshot(summary)
     assert main(["--formal", "--qa", str(tmp_path / "qa_set_dev_v0.csv")]) == 2
-    assert not (SUMMARY_DIR / "chunking_comparison").exists()
+    assert _snapshot(summary) == before
+
+
+def _assert_chart_labels_clear_the_bars(chart: str) -> None:
+    width = int(re.search(r'width="(\d+)"', chart).group(1))
+    rects = [
+        (float(x), float(y), float(w))
+        for x, y, w in re.findall(r'<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)"', chart)
+    ]
+    labels = re.findall(r'<text x="([\d.]+)" y="([\d.]+)"[^>]*>([^<]*\([^)]*\))</text>', chart)
+    assert labels
+    for raw_x, raw_y, text in labels:
+        x, y = float(raw_x), float(raw_y)
+        end = x + 7.0 * len(text)
+        assert end <= width
+        for rect_x, rect_y, rect_w in rects:
+            if abs((rect_y + 12) - y) > 8:
+                continue
+            if rect_x >= x:
+                assert rect_x >= end
+            else:
+                assert x >= rect_x + rect_w
 
 
 def test_formal_bundle_keeps_the_hit_rate_objects(tmp_path):
@@ -430,3 +468,7 @@ def test_formal_bundle_keeps_the_hit_rate_objects(tmp_path):
     assert metrics["strategies"][0]["hit@1"] == hit_at_1
     assert metrics["strategies"][0]["hit@3"] == hit_at_3
     assert "answer_correctness" not in metrics
+    chart = (directory / "hit_rates.svg").read_text(encoding="utf-8")
+    assert "1/2 (0.5)" in chart
+    assert "2/2 (1.0)" in chart
+    _assert_chart_labels_clear_the_bars(chart)

@@ -53,6 +53,8 @@
 | 2026-11-17 20:50 GMT+8 | T2 | 同上；本行是组员自己重跑，不是又一次生成代码 | 未改代码。在仓库根目录、已激活 `.venv` 的终端重跑任务卡上的验收命令 | 重跑了命令。终端里留存的最后一条是 `python -m eval.chunking_experiment`，exit 0。`comparison.json` 的 `generated_at` 为 `2026-11-17T12:50:10+00:00`，hit@1 / hit@3 与 20:43 的 agent 运行相同 | 组员本人重跑：`python -m pytest tests/test_chunking.py -q`、`python -m pytest -q`、`ruff check .`、`python -m eval.chunking_experiment --help`、`python -m eval.chunking_experiment`。屏幕上只留住了最后一条实验命令（exit 0）；pytest、ruff、`--help` 的通过行数没有留在终端记录里，这里不补写 | 仍待 PR 的 `ci / check` | 尚未开 PR |
 | 2026-11-20 | T2（按 PR #10 审阅意见） | Cursor Grok 4.7（编码 agent） | 只改 `eval/chunking_experiment.py`、`tests/test_chunking.py` 和 `docs/CHUNKING_EXPERIMENT.md` 的一句说明。开发模式的 `--out` 不能落在 `eval/results/summary/`（含相对路径和符号链接）；`--formal` 把实际 `--qa` 交给门槛，并拒绝 `qa_set_dev_v0.csv` 以及任何非 `eval/qa_set.csv` 的路径。未改 `metrics.py`，未重跑对比实验，未改已有数字 | 待组员阅读这次门槛改动 | 待组员重跑 `pytest tests/test_chunking.py -q` 和 `ruff check .`。agent 在改完后本地跑这两条，结果写在 `docs/DEV_LOG.md` 本轮对应行 | 待推送后看本 PR 的 `ci / check` | #10 |
 | 2026-11-21 | T2（PR #14 冻结语料之后的重跑） | Cursor Grok 4.7（编码 agent） | 从 `origin/main` 开分支 `t2-chunking-frozen-corpus`。在 16 篇冻结语料上重跑 `python -m eval.chunking_experiment`。开发说明改为引用当次 `corpus_ref`，不再把已冻结语料写成 `CORPUS_V0`。改 `eval/chunking_experiment.py`、`tests/test_chunking.py`、`docs/CHUNKING_EXPERIMENT.md`。未改 `metrics.py`、语料、QA、`config.toml`。`--formal` 仍退出 2，未写 `summary/` | 待组员阅读这次重跑和门槛输出 | agent 跑了 `--formal`（exit 2）、开发对比（exit 0，JSON `generated_at` `2026-11-21T01:24:36+00:00`）、`ruff check .`、`pytest`。组员本人尚未重跑。原始输出在 `RUNLOG.md` 第 10 节 | 待本分支 PR 的 `ci / check` | 新分支，尚未开 PR |
+| 2026-11-22 | T2（PR #15 正式 QA 合并后的正式对比） | Cursor Grok 4.7（编码 agent） | 从 `origin/main` 开分支 `t2-chunking-formal`。`python -m eval.chunking_experiment --formal` 退出码 0，写入 `eval/results/summary/chunking_comparison/`（`config.json`、`metrics.json`、`run.md`、`hit_rates.svg`）。`metrics.json` 带上分歧列表。改 `eval/chunking_experiment.py`、`tests/test_chunking.py`、`docs/CHUNKING_EXPERIMENT.md`。未改 `metrics.py`、语料、QA、`config.toml` | 待组员阅读正式结果 | agent 跑了 `--formal`（exit 0，`generated_at` `2026-11-22T02:13:25+00:00`）、`ruff check .`、`pytest`。组员本人尚未重跑。原始输出在 `RUNLOG.md` 第 12 节 | 待本分支 PR 的 `ci / check` | 新分支，尚未开 PR |
+| 2026-11-22 | T2（正式对比图） | Cursor Grok 4.7（编码 agent） | 只改 `hit_rates.svg` 的布局：数字改到柱子右侧的固定槽里，并加宽画布。用已有 `metrics.json` 重画，没有重跑检索，没有改命中率。`eval/chunking_experiment.py`、`tests/test_chunking.py` | 待组员看图 | agent 跑了 `pytest tests/test_chunking.py::test_formal_bundle_keeps_the_hit_rate_objects` 和 `ruff`。组员本人尚未重跑 | 待本分支 PR 的 `ci / check` | 新分支，尚未开 PR |
 
 ## 组员追加记录（T1，任务包 #1）
 
@@ -91,7 +93,7 @@ fixed 668 chunks、paragraph 775 chunks，全部偏移逐字匹配、出处及�
 > 未使用 AI 生成的模拟结果。各成员贡献比例与签名见本报告最后一页。
 
 不要把示例句直接照抄。T4 的验证命令仍是编码 agent 跑的。T2 的第一行也是 agent 跑的；第二行才是组员本人于 2026-11-17 20:50 重跑验收命令，其中只有 `python -m eval.chunking_experiment` 的退出码和 JSON 时间戳留在本机记录里。
-T2 在 2026-11-21 用已冻结的 16 篇语料重跑了检索，QA 仍是开发集，`--formal` 未通过，所以这仍不是正式实验；回答正确率至今为 0。
+T2 在 2026-11-22 对已冻结语料和 PR #15 的正式 QA 跑了 `--formal`（exit 0）。那次命令是 Cursor 编码 agent 执行的，组员本人尚未重跑。回答正确率至今没有在这次对比里计算。
 贡献比例页须在全员开工后据实填写。
 # AI 辅助使用记录（学术诚信 / 贡献声明用）
 
@@ -189,8 +191,30 @@ T2 的 hit@k 仍是开发集上的检索，不是冻结语料上的正式实验�
 
 ## T5 additional records
 
+| 2026-11-21 | T5 offline handoff smoke check | Codex | Added `demo.validate_export` to export two synthetic I4 answers, consume them with the existing T4 loader and verify MOCK provenance. Agent ran the command and Ruff successfully; no paid API or formal metrics. | Human review and personal rerun Pending. |
+
+| 2026-11-21 | T5 demo guide | Codex | Added a classroom walkthrough, REAL-run prerequisites and synthetic qualitative failure examples. Agent executed `python -m demo.run` and an explicit MOCK batch export (2 records); no real LLM call or formal metric. | Human review and personal rerun Pending. |
+
 | 2026-11-20 | T5 | Codex | Added heuristic citation coverage, invalid-output refusal, batch I4 export, offline demo and tests on branch t5-generation-validation. Agent ran the checks documented in ANSWER_QUALITY.md. | User review and personal rerun Pending. No human review signatures or formal metrics supplied. |
 | 2026-11-20 | T5 follow-up | Codex | Added shared refusal diagnostics, MOCK batch subprocess coverage and atomic-publication failure cleanup tests, updated demo instructions. | Agent executed 37 T5/offline tests and 156 passing tests with test_store.py excluded (3 skipped). Full suite still crashes in Chroma outside sandbox. Human code review and personal rerun Pending. |
+
+## T4 additional records（本分支 `t4-k8s-qa-set`，PR #15）
+
+> 解这次冲突的口径见 `RUNLOG.md` 第 11 节：main 侧已有内容一字不动，本分支自己的行
+> 只做追加，因此本节以上那份带重复块（一级标题在第 1 与第 96 行）的 `docs/AI_USAGE.md`
+> 是原样继承的，不在本 PR 里删别人写的行；已知缺陷由 #16 / #17 的作者另开 PR 修。
+> 本节以下几行取代上文里属于 T4 的旧口径（含标题句中「除 T4 外组员尚未开始」——
+> T4 的登记就在下表）。
+
+| 日期 | 任务包 | AI / Agent 名称 | 具体用途（生成什么、改哪些文件） | 我亲自复核了什么 | 我亲自跑了哪些命令 | 云端 CI 结果 | PR 号 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-11-20 | T4（正式 Kubernetes QA 集，分支基于尚未合并的 PR #14） | Qoder（编码 agent）辅助写 | 35 题 `git mv` 为 `eval/qa_set_dev_v0.csv`；生成正式集 `eval/qa_set.csv`（36 条：26 answerable + 10 unanswerable，逐字引自 #14 冻结快照的 12 篇文档）与签名工作单 `eval/review/formal_qa_review.md`；改 `eval/metrics.py`（`token_occurs()` 词边界、`qa_set_status()` 由文件与行内容推导、`assert_formal_inputs()` 两类新拒绝）、`tests/test_eval_metrics.py`（67 → 82 例）、`eval/README.md`、`eval/judge_protocol.md`、`RUNLOG.md` 第 11 节；新增 `.gitattributes` | **题目正文、gold 行号与 `notes` 理由均由 agent 起草**（生成脚本留在本地 `.tmp/`、未入库，因此 csv 是唯一正式工件）；本人抽查了按行号切出的引文，拦下并改掉 agent 写的四处问题（见 `RUNLOG.md` 第 11.4 节）；确认 agent **没为任何一条 `unanswerable` 填 `REVIEWED_BY`**，也没把 hit@k 写进代码常量 | 全部由 agent 在本机执行、本人阅读但未亲手重跑：`ruff check .`、`pytest`（148 passed / 2 skipped）、`validate`（正式与开发两份均 `exit=0`）、`validate --require-reviewed`（`exit=2`）、`cli ingest`（16 docs → 668 chunks）、`retrieval`（两份 hit@k）；原始输出见 `RUNLOG.md` 第 11 节 | 未执行：run 页报 "The job was not started because recent account payments have failed or your spending limit needs to be increased"（账号级 Actions 计费，job 未被调度）；已用 `git worktree` 干净检出复现 ruff + pytest 全绿（`RUNLOG.md` 第 11.9 节） | 分支 `t4-k8s-qa-set` |
+| 2026-11-21 | T4（合并 `origin/main` 后的冲突处理） | Qoder（编码 agent）执行，组员本人阅读 | 只动 `RUNLOG.md`、`docs/DEV_LOG.md`、`docs/AI_USAGE.md` 三个文档：main 上 T2 的第 9 节与本分支 T4 的第 9 节撞号，**T4 一节整体改编号为第 10 节**并同步全部交叉引用，T2 的原文一字未改；代码层交给 git 自动合并，未手工改写 T1/T2 的实现 | 逐条确认解冲突没有丢掉任何一边的记录（合并前后行数与标题都对照过）；确认没有替组员补写任何「亲自执行/复核」表述；另：agent 试图用浏览器更新 PR 描述，因会话未登录而按预定停止条件退出（**未输入任何凭据**），但从 PR 列表页得到 #15 / #16 与两个新账号，据此更正了 DEV_LOG 里「T5 无人认领」的错误推断（见 `RUNLOG.md` 第 11.11 节） | 全部由 agent 在本机执行、本人未亲手重跑：`ruff check .` 通过、`pytest` **168 passed / 2 skipped**、`validate`（正式与开发两份 `exit=0`）、`validate --require-reviewed` `exit=2`、`chunking_experiment --formal` `exit=2`（只剩未签名拒答一条理由） | PR 页显示 1 successful check（组员浏览器截图，仓库内无可核验 run id）；11-20 那轮的账号级 Actions 计费故障已恢复 | 分支 `t4-k8s-qa-set` |
+| 2026-11-21 | T4（第二次合并 `origin/main`（`0ee7d5e`，含 T5 的 PR #16），并把拒答题核对转交组员） | Qoder（编码 agent）执行，组员本人阅读 | 解唯一冲突 `docs/AI_USAGE.md`：本分支全文保留，main 新增的 `## T5 additional records`（2 行）逐字节原样附到文件末尾，别人写的行一字未改（脚本断言追加块与 main 相同、本分支行零丢失）；本次合并未触碰 `eval/`、`tests/`、`data/raw/`、`.gitattributes`。另用 `metrics.token_occurs()` 逐条重跑 10 题共 23 个声明 token（个数依次 3/2/2/2/3/2/2/3/2/2）确认全部不存在，据此生成 KN01–KN10 判定表与候选段落摘录，以组员已登录会话发成 PR #15 评论（`issuecomment-7058643165`） | 阅读并确认解冲突只做追加、**没有替任何组员写 `REVIEWED_BY`**（仍 0/10）；读回 `537Lab` 的 non-approving review 原文并逐条对仓库核验——它对 KN03 的疑问（`services` 页链到 `.go` 源码）针对的是 `93bfb03`，而 `b2263d9` 已查明该链接实际指向 `pkg/kubelet/envvars/envvars.go`，与 kube-proxy 的实现语言无关 | 全部由 agent 在本机执行、本人未亲手重跑：`ruff check .`、`pytest -o addopts="" -q`（**186 passed / 2 skipped**）、`validate`（正式与开发均 `exit=0`）、`validate --require-reviewed`（`exit=2`）、`chunking_experiment --formal`（`exit=2`） | 已取得的 run：`44779731964`（旧 head，49s）、`44780982969`（`ac173a2`，29s）、`44877582328`（`f4cc5fa`，**succeeded in 28s**，步骤含 Static check (ruff) / Tests (offline) / Verify no secret）——本列更正上一行的「无可核验 run id」 | 分支 `t4-k8s-qa-set`（PR #15） |
+| 2026-11-21 | T4（更正上一行已过期的口径 + 登记人工复核落地） | Qoder（编码 agent）执行取证与登记，组员本人阅读 | **本轮未改任何代码**：`git fetch` 后发现远端分支 head 已被他人从 `11470fb` 推到 `d39d658`（`ziqilin669` 经 GitHub 网页上传已签名的 `eval/qa_set.csv` 与签名工作单；`ldk13856478627-cell` 把门禁测试由「关闭」翻为「打开」），本地 `git merge --ff-only` 跟上，未为追赶而制造新提交；逐行 csv 比对确认除 `notes` 外无列被改、`b2263d9` 的 KN03 纠正未被回退；在 `d39d658` 的 detached worktree 实跑四项命令；登记写入 `RUNLOG.md` §11.13 / §11.14 | 本人阅读了 agent 输出的 diff 与四项命令结果。**人工复核本身不是 agent 做的**：10 条 `REVIEWED_BY` 由 `ziqilin669` 本人逐条复核后以自己账号写入（签名原文：`Reviewer name(s) and date: ziqilin669, 2026-11-21`、`Items changed after review: none; KN07 kept as written`）。同时记录两处我怀疑过但**实测不成立**的问题（`REVIEWED_BY` 写在 `ABSENT_TOKENS` 同一行尾不会污染解析；负向对照测试仍在），以及一处待 T2 表态的越界改动（T1 账号改了 T2 拥有的 `tests/test_chunking.py`） | 全部由 agent 在 `d39d658` 本机执行、本人未亲手重跑：`ruff check .` 通过、`pytest -o addopts="" -q` **186 passed / 2 skipped**、`validate` `exit=0`（`10/10 carry REVIEWED_BY`）、`validate --require-reviewed` **`exit=0`**（上一行仍为 `exit=2`，已过期） | 本轮未取 —— 该 head 由他人推送且 PR 处于冲突态，页面 Checks 未复核，不写云端结论 | 分支 `t4-k8s-qa-set`（PR #15） |
+| 2026-11-21 | T4（第三次合并 `origin/main`（`30e6e98`，含 #18 / #20），解 6 处文档冲突） | Qoder（编码 agent）执行，组员本人阅读 | **本轮只动文档，未改代码与测试**：`git merge origin/main` 后共 6 处冲突（`RUNLOG.md` 1、`docs/DEV_LOG.md` 1、本文件 4），代码与测试 0 处。本文件的解法按上一行登记的口径：main 那 195 行**逐字作为前缀继承**（包括一级标题重复出现在第 1 与第 96 行、`0ee7d5e → main` 为 `+195 / −98` 的已知缺陷，本 PR 不删别人写的 98 行），本分支自己的行只追加到本节；`RUNLOG.md` 里 T4 一节改号为第 11 节（main 上 T2 已占用第 10 节，那份 46 行逐字不动） | 本人阅读了 agent 给出的解冲突口径与 37 项断言脚本的输出；确认**没有删改任何一行别人写的记录**；改号脚本只作用于本分支自己的行，**T2 指向自己第 10 节的指针未被代改**；本行与上一行仍只反映 agent 取证，人工复核仍由 `ziqilin669` 本人于上一行完成 | 全部由 agent 在本机（`.venv`，Python 3.13.5）执行、本人未亲手重跑：合并后 `ruff check .` 通过、`pytest -o addopts="" -q` **195 passed / 2 skipped**（合并前 186，+9 例来自 #18 / #20）、`validate` `exit=0`、`validate --require-reviewed` **`exit=0`**；过程见 `RUNLOG.md` 第 11.15 节 | 本轮未取 —— 本次合并产生的 head 尚未推送，不写云端结论 | 分支 `t4-k8s-qa-set`（PR #15） |
+
+**人工评分的正确率仍为 0**（无答案产物、无人评分）；10 条拒答题已由 `ziqilin669` 本人逐条复核并署名（2026-11-21，见 `RUNLOG.md` §11.13），但 26 道 answerable 题仍未经第二人逐题阅读。
 
 ## T3 追加记录 / T3 disclosure（2026-11-18）
 
@@ -212,3 +236,8 @@ T2 的 hit@k 仍是开发集上的检索，不是冻结语料上的正式实验�
 ### 2026-11-21 T3 同步说明（Agent 核查 GitHub）
 
 PR #14 的冻结 Kubernetes 语料已进入 `main`，PR #15 的正式 QA 人工签名仍待完成。上方 T3 记录只描述 2026-11-18 的四篇开发语料实验；该历史记录不能替代冻结语料上的重跑。此次仅同步分支及保全披露记录，没有在本执行环境运行 ONNX 检索或伪造新的实验数字；T3 新实验与学生本人亲自复核均待完成。旧版其它成员登记原样保留。
+
+### 2026-11-22 T3 同步与 T4 API 兼容修复（ChatGPT / GitHub 连接）
+
+本次由 ChatGPT 在账号持有人请求下检查 PR #11 和最新 main：保全 main 的已有记录并追加原 T3 分支披露；修复 T3 对已移除 `QA_SET_STATUS` 的引用，改用 T4 新增的 `qa_set_status(qa, items)`，不修改 T4 文件。PR #15 的正式 36QA 与全部 10 个拒答人工签名现已合入；PR #23/T2 的正式策略对比数字只作为独立交叉检查，不登记为 T3 实跑。
+本次仅通过 GitHub API 读取源码和组织合并；当前执行容器没有 Chroma/ONNX，且不能联网下载依赖，因此**没有在此环境运行本地模型、真实检索诊断或完整 pytest**。GitHub CI 应在最终 head 上另核查，学生本人阅读/重跑与他人 Approve 仍是待办。不虚构人工签名或实验数据。

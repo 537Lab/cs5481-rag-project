@@ -24,7 +24,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from eval.evidence import EvidenceSpan, evidence_coverage, is_retrieval_hit, locate_evidence
-from eval.metrics import CATEGORIES, DEFAULT_QA, QA_SET_STATUS, QAItem, load_qa
+from eval.metrics import CATEGORIES, DEFAULT_QA, QAItem, load_qa, qa_set_status
 from ragkit.chunking import ChunkConfig, build_chunker
 from ragkit.config import DEFAULT_CONFIG, ROOT, load_settings
 from ragkit.contracts import Chunk, Document, Embedder, RetrievedChunk, VectorStore
@@ -398,7 +398,9 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _provenance(settings, documents: Sequence[Document], qa: Path, config_path: Path) -> dict:
+def _provenance(
+    settings, documents: Sequence[Document], qa: Path, config_path: Path, items: Sequence[QAItem]
+) -> dict:
     snapshot = [
         {
             "doc_id": d.doc_id,
@@ -447,7 +449,7 @@ def _provenance(settings, documents: Sequence[Document], qa: Path, config_path: 
         "manifest_sha256": _sha256(settings.manifest),
         "qa": str(qa),
         "qa_sha256": _sha256(qa),
-        "qa_status": QA_SET_STATUS,
+        "qa_status": qa_set_status(qa, items),
         "config": str(config_path),
         "config_sha256": _sha256(config_path),
         "corpus_snapshot_sha256": digest,
@@ -525,7 +527,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 else "REAL_LOCAL",
                 "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
                 "command": shlex.join(["python", "-m", "eval.retrieval_diagnostics", *argv]),
-                "provenance": _provenance(settings, documents, args.qa, config_path),
+                "provenance": _provenance(settings, documents, args.qa, config_path, items),
                 "parameters": {
                     "strategy": settings.chunk_strategy,
                     "collection": settings.collection_name,

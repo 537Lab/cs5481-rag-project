@@ -47,6 +47,7 @@ from eval.metrics import (
     QAItem,
     QASetError,
     _config_snapshot,
+    _git_user,
     assert_formal_inputs,
     load_qa,
     parse_hits,
@@ -307,6 +308,65 @@ def build_payload(
     }
 
 
+def _xml(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+_BAR_MAX = 96
+_TEXT_SLOT = 124
+_TEXT_GAP = 8
+_NAME_WIDTH = 108
+_CHART_COLUMNS = (("hit@1", "#3b6ea5"), ("hit@3", "#c47b2b"))
+
+
+def _comparison_svg(strategies: object) -> str:
+    """Bar chart of the hit-rate objects already on each strategy row.
+
+    Each number sits in its own slot to the right of a fixed-width track, so a
+    long label cannot run into the next bar.
+    """
+    rows: list[dict[str, object]] = []
+    if isinstance(strategies, list):
+        rows = [row for row in strategies if isinstance(row, dict)]
+    bar_x: list[int] = []
+    cursor = _NAME_WIDTH
+    for _column in _CHART_COLUMNS:
+        bar_x.append(cursor)
+        cursor += _BAR_MAX + _TEXT_GAP + _TEXT_SLOT + 20
+    width = cursor - 8
+    height = 28 + 36 * max(len(rows), 1)
+    lines = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'viewBox="0 0 {width} {height}">',
+        '<rect width="100%" height="100%" fill="#ffffff"/>',
+    ]
+    for left, (key, _color) in zip(bar_x, _CHART_COLUMNS, strict=True):
+        lines.append(f'<text x="{left}" y="16" font-size="12" fill="#333">{key}</text>')
+    for index, row in enumerate(rows):
+        top = 28 + index * 36
+        lines.append(
+            f'<text x="8" y="{top + 18}" font-size="12" fill="#222">'
+            f'{_xml(str(row.get("strategy", "")))}</text>'
+        )
+        for left, (key, color) in zip(bar_x, _CHART_COLUMNS, strict=True):
+            rate = row.get(key)
+            value = rate.get("rate") if isinstance(rate, dict) else None
+            fraction = float(value) if isinstance(value, (int, float)) else 0.0
+            filled = max(0.0, min(fraction, 1.0)) * _BAR_MAX
+            lines.append(
+                f'<rect x="{left}" y="{top + 6}" width="{_BAR_MAX}" height="14" fill="#ececec"/>'
+            )
+            lines.append(
+                f'<rect x="{left}" y="{top + 6}" width="{filled:.1f}" height="14" fill="{color}"/>'
+            )
+            lines.append(
+                f'<text x="{left + _BAR_MAX + _TEXT_GAP}" y="{top + 18}" font-size="11" '
+                f'fill="#222">{_xml(_format_rate(rate))}</text>'
+            )
+    lines.append("</svg>")
+    return "\n".join(lines) + "\n"
+
+
 def write_result(payload: dict[str, object], directory: Path, *, formal: bool) -> list[Path]:
     """Development: one JSON file. Formal: the summary bundle, and only then."""
     if formal and payload.get("label") != "FORMAL":
@@ -331,6 +391,7 @@ def write_result(payload: dict[str, object], directory: Path, *, formal: bool) -
         "label": payload["label"],
         "strategies": payload["strategies"],
         "disagreement_count": len(payload["disagreements"]),
+        "disagreements": payload["disagreements"],
         "judge": payload["judge"],
     }
     written = [
@@ -350,6 +411,9 @@ def write_result(payload: dict[str, object], directory: Path, *, formal: bool) -
         f"{payload['shared'].get('size')} / {payload['shared'].get('overlap')} / "
         f"{payload['shared'].get('top_k')} / {payload['shared'].get('min_coverage')}",
         f"- embedding: {payload['shared'].get('embedding')}",
+        f"- executor: {_git_user()}",
+        "- exit: 0",
+        "- chart: `hit_rates.svg` (drawn from the hit@1 / hit@3 objects below)",
         "",
         "Retrieval hit rates below are the objects returned by "
         "`eval.metrics.retrieval_hit_rate`. This comparison does not score answers.",
@@ -367,7 +431,9 @@ def write_result(payload: dict[str, object], directory: Path, *, formal: bool) -
     lines.extend(["", f"Disagreements: {len(payload['disagreements'])}", ""])
     run_md = directory / "run.md"
     run_md.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return [*written, run_md]
+    chart = directory / "hit_rates.svg"
+    chart.write_text(_comparison_svg(payload["strategies"]), encoding="utf-8")
+    return [*written, run_md, chart]
 
 
 def _format_rate(value: object) -> str:

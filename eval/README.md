@@ -7,15 +7,18 @@ policy the team will use.
 | --- | --- | --- |
 | [`evidence.py`](evidence.py) | shared predicates: `locate_evidence`, `evidence_coverage`, `is_retrieval_hit` | frozen |
 | [`qa_template.csv`](qa_template.csv) | 2 SAMPLE rows showing the I2 format | format example only |
-| [`qa_set.csv`](qa_set.csv) | 35 QA pairs (27 answerable / 8 unanswerable), gold = verbatim quotes | **development set on `CORPUS_V0`**, to be re-validated against the frozen corpus |
-| [`metrics.py`](metrics.py) | the team's single metric implementation, interface I3 | delivered, no formal numbers published yet |
+| [`qa_set.csv`](qa_set.csv) | **formal set**, 36 Kubernetes QA pairs (26 answerable / 10 unanswerable) quoted against the frozen snapshot | gold quotes machine-verified; **refusal labels await human `REVIEWED_BY`** |
+| [`qa_set_dev_v0.csv`](qa_set_dev_v0.csv) | the original 35 Wikipedia pairs (27 / 8), kept as the development set | plumbing only, never a formal result |
+| [`review/formal_qa_review.md`](review/formal_qa_review.md) | the sheet a member signs to attest each refusal label | unsigned by design until the group reviews |
+| [`metrics.py`](metrics.py) | the team's single metric implementation, interface I3 | delivered; retrieval numbers exist, nothing graded yet |
 | [`judge_protocol.md`](judge_protocol.md) | how answer correctness and unanswerable labels are decided by humans | protocol; grading not started |
 | [`results/`](results/README.md) | `summary/` committed, `raw/` gitignored | `summary/` still empty |
 
 The 20+ real QA pairs and the single metrics implementation therefore exist, but
-no experiment result has been published here: the chunking comparison belongs to
-T2, the answer artifacts (I4) to T5, and formal numbers need the frozen corpus
-(I1). See "Output location and honesty rules" below.
+no graded experiment result has been published here: the chunking comparison belongs
+to T2, the answer artifacts (I4) to T5, answer correctness needs human grading, and
+the refusal labels need the signatures described in [`judge_protocol.md`](judge_protocol.md)
+§3. See "Output location and honesty rules" below.
 
 The project's single source of truth for background, goals, the item-by-item mapping
 of the instructor's requirements, the five tasks, the dependency/integration schedule
@@ -42,12 +45,16 @@ make the comparison meaningless.
 **Common standard = a verbatim quote from the ORIGINAL document.**
 
 1. `qa_set.csv` stores `evidence_doc_id` + `evidence_quote` (exact substring of
-   the source document text).
+   the source document text). A quote may span several source lines; the csv is
+   read with `csv`, never by splitting on newlines.
 2. `eval/evidence.py::locate_evidence()` resolves that quote to a character
    span `[char_start, char_end)` in the original document. This span is the
    **same for every chunking strategy**.
 3. A retrieved chunk is scored by `evidence_coverage()` — how much of that span
    it covers. Chunk ids are used only for display and citation, never for scoring.
+4. `eval/metrics.py::qa_corpus_binding()` additionally checks that every cited
+   `doc_id` is listed in `data/raw/frozen_manifest.json`. A verbatim quote in
+   some other file proves nothing about which corpus a number describes.
 
 `eval/qa_template.csv` contains **2 SAMPLE rows showing the format only**. They
 are not evaluation data. The SAMPLE-001 quote was verified to exist verbatim at
@@ -127,12 +134,16 @@ All commands run from the repository root and need no API key.
 | command | what it proves |
 | --- | --- |
 | `python -m eval.metrics --help` | the I3 entry point is importable and callable |
-| `python -m eval.metrics validate` | every gold quote is verbatim in `data/raw/`, labels are consistent, declared tokens really are absent |
+| `python -m eval.metrics validate` | every gold quote is verbatim in `data/raw/`, labels are consistent, declared tokens really are absent as whole words, and the set binds to the frozen snapshot |
+| `python -m eval.metrics validate --qa eval/qa_set_dev_v0.csv` | the same checks on the development set; the printed `QA set status` says which file it was |
 | `python -m eval.metrics validate --require-reviewed` | fails until a named human attests each unanswerable item (`REVIEWED_BY`) |
 | `python -m eval.metrics retrieval --hits 1,3 --out eval/results/raw/retrieval_fixed.json` | REAL hit@k over the built index (needs `python -m ragkit.cli ingest`) |
 | `python -m eval.metrics retrieval --chunking paragraph --out ...` | the same QA against the other strategy's collection, without editing `config.toml` |
 | `python -m eval.metrics score --run-id <run_id> --grades eval/results/raw/grades.csv` | scores T5's answer artifact `eval/answers/<run_id>.jsonl` |
 | `python -m eval.metrics mock-demo` | metric maths and CLI wiring on MOCK fixtures; every number is labelled MOCK |
+
+Every command reads `eval/qa_set.csv` unless `--qa` says otherwise, so the team's
+default is the formal set and a development run is always an explicit choice.
 
 `score` reads interface I4: one JSON object per line, the nested `answer` object
 plus `retrieved_chunk_ids`, `run_id` and `config_ref`. Flat records, `.json`
@@ -148,12 +159,26 @@ development numbers out of the directory the report reads.
 
 ## Frozen inputs and who consumes what
 
-Formal numbers are only meaningful once the inputs are frozen. `CORPUS_V0`
-(the 4 committed documents) is frozen for development only and is **not** the
-formal experiment corpus unless the group explicitly falls back to it
-(see [`docs/PROJECT_PLAN.md` §6.2](../docs/PROJECT_PLAN.md)). T4's `qa_set.csv`
-gold quotes must be verbatim substrings of the frozen corpus snapshot, and every
-strategy comparison must use the same frozen `qa_set.csv`.
+Formal numbers are only meaningful once the inputs are frozen. T1's
+`data/raw/frozen_manifest.json` (interface I1) freezes 16 documents: 12 Kubernetes
+v1.35 pages plus the 4 `CORPUS_V0` Wikipedia excerpts, which stay as the
+development corpus. `CORPUS_V0` alone is **not** the formal experiment corpus
+(see [`docs/PROJECT_PLAN.md` §6.2](../docs/PROJECT_PLAN.md)). T4's formal
+`qa_set.csv` quotes only documents inside that snapshot, `metrics.py` verifies the
+binding on every run, and every strategy comparison must use the same frozen
+`qa_set.csv`.
+
+Because `scripts/fetch_corpus.py` hashes the corpus bytes, line endings are part
+of a frozen input: `.gitattributes` pins `* text=auto eol=lf` so the manifest
+hashes, the `corpus_ref` and the `qa_set_ref` values mean the same thing on Linux
+and Windows.
+
+The QA csv files need that pinning for a second reason. A gold quote may span two
+source lines inside one quoted field, and `load_qa` opens the file with
+`newline=""`, so the field keeps whatever line ending the checkout produced while
+the corpus is always read as `\n`. On a CRLF working copy those quotes stop matching
+the source - and only there, so CI on Linux would stay green while a reviewer's local
+`validate` fails. Two tests pin the whole claim, including a CRLF copy that must fail.
 
 The shared artifacts and their owners are defined in
 [`docs/PROJECT_PLAN.md` §6.1](../docs/PROJECT_PLAN.md): I1 corpus snapshot (T1),
@@ -180,15 +205,19 @@ Never fabricate numbers and never call `verify_citation_structure()` result
 
 ## Not here (yet)
 
-- **Formal experiment numbers.** `results/summary/` is empty on purpose. The
-  development hit rates are recorded in `RUNLOG.md` and in gitignored
-  `results/raw/`, and `metrics.py` labels them `qa_set_status: development`.
+- **Graded answer correctness.** `results/summary/` is empty on purpose. Nobody
+  has graded an answer yet, so `answer_correctness` reports
+  `"pending human grading"`. Real retrieval numbers exist in gitignored
+  `results/raw/` (see `RUNLOG.md`), and `metrics.py` prints the derived
+  `qa_set_status` in every report, so a run on the formal set is still labelled
+  with how many refusal labels are unsigned.
+- **The signatures.** The 10 refusal labels in `qa_set.csv` are the item
+  author's proposal until a second member records `REVIEWED_BY` in
+  [`review/formal_qa_review.md`](review/formal_qa_review.md); `--require-reviewed`
+  and `--formal` stay closed until then.
 - `eval/answers/<run_id>.jsonl` answer artifacts (T5). Until a real one exists,
   `score` has only been exercised against a MOCK artifact and answer correctness
   cannot be computed at all.
-- Human answer grading, so `answer_correctness` stays "pending human grading".
-- The frozen formal corpus (I1) and the QA re-validation that follows it: the 35
-  current items were written against `CORPUS_V0` and stay the development set.
 - The chunking comparison experiment itself (T2), any chunk-size / overlap
   tuning, and any paid LLM-as-judge call.
 

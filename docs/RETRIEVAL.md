@@ -1,5 +1,20 @@
 # T3 检索层与向量库 / Retrieval and vector storage
 
+
+> **2026-11-22 最新状态（以下旧记录保留为历史）**：PR #15 已合并，正式 `eval/qa_set.csv` 已有 36 题（26 answerable，10 unanswerable，全部 10 条拒答由组员填写 `REVIEWED_BY`）；Kubernetes 冻结语料快照 `cs5481-k8s-v135-16docs-36fd3eedf33f` 已可用。PR #23 中 T2 的正式对比为 fixed 668 块、hit@1=8/26、hit@3=18/26；paragraph 775 块、hit@1=10/26、hit@3=17/26，**不属于 T3 重新运行或验证的结果**。
+>
+> **当前剩余验收**：T3 的 2026-11-18 四篇开发语料/35QA 检索诊断仍是历史数据；截至本次登记，T3 未在上述正式 36 题上真正重跑本地 Chroma/ONNX。主线 T4 已移除静态 `QA_SET_STATUS`，T3 此次改为动态调用 `qa_set_status(qa, items)`，以避免对正式和开发 QA 错误使用同一标识。合并与接口修复不等于正式诊断；云端 CI 也不能代替本地 ONNX 运行或学生人工复核。
+>
+> **在独立 clone 中复跑（不要重建其他人的共享索引）**：先执行 `python -m eval.metrics validate --require-reviewed`、`python -m pytest tests/test_store.py tests/test_embeddings.py tests/test_retrieval_diagnostics.py -q`、`python -m pytest -q`、`python -m ruff check .`、`python -m ragkit.cli ingest`（fixed）。若还要检查 paragraph，按第 10 节示例单独建立 paragraph collection。然后分别运行下列命令；每轮使用新的 gitignored 输出目录，不覆盖已有原始结果。
+>
+> ```bash
+> python -m eval.retrieval_diagnostics --qa eval/qa_set.csv --strategy fixed --top-k 3 --min-coverage 0.5 --output-dir eval/results/raw/t3-k8s-20261122-fixed
+> python -m eval.retrieval_diagnostics --qa eval/qa_set.csv --strategy paragraph --top-k 3 --min-coverage 0.5 --output-dir eval/results/raw/t3-k8s-20261122-paragraph
+> ```
+>
+> 复跑后核验 `diagnostics.json` 的 36 题、index count、QA/manifest/code SHA256、完整实际深度排名、出处和 `get_chunk` 往返，补入真实时间/命令/模型/失败样本及结果。正式 hit@k 一律来自 T4 `eval/metrics.py`，不要在 T3 另定义指标或把 T2 的数字冒称 T3 实跑。
+
+
 > **状态更新 / Update（2026-11-21 HKT，GitHub 状态核查）**：PR #14 的 Kubernetes v1.35 冻结语料已合入 `main`（12 个来源页面、16 个清洗文档），因此下方 2026-11-18 所说“尚无 I1 冻结文件”是**当时的历史状态**，不是当前阻塞。此文第 6–8 节的 4 文档／35QA 数据、示例 score、排名和旧快照哈希均仅对应 `CORPUS_V0` 开发实验，**不得标成冻结 Kubernetes 重跑结果**。PR #15 的正式 QA 及 KN01–KN10 人工复核尚未完成；本次同步尚**未**在新语料上实跑 diagnostics，新数据与输出哈希均待真实执行后补入。CI/pytest 不能代替 ONNX 实验，也不能代替学生本人复核。
 >
 > **复跑提示（尚未执行）**：先在冻结语料对应的 `main` 环境重建索引：`python -m ragkit.cli ingest`，然后根据当前真实 QA 版本分别选择开发或正式输入运行 `python -m eval.retrieval_diagnostics --qa eval/qa_set.csv --strategy fixed --top-k 3 --min-coverage 0.5 --output-dir eval/results/raw/t3-k8s-fixed-<run-id>`；每次使用新的输出目录，核对报告中的 `corpus_snapshot_sha256`、`qa_sha256`、collection 实际 count、retrieval 和 provenance checks。完成前不要宣称已重跑或通过正式评测。
