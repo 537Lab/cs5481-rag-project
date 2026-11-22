@@ -67,8 +67,9 @@ ignored `raw/` directory; T4 can pass their explicit path to its `--outputs` opt
 
 Preserve the adjacent `.config.json` with the JSONL. It records effective model
 settings and input hashes. Record the Ollama model digest, server version and
-dependency versions alongside it when handing off. Human judges must inspect
-full source text when the exported prefix quote omits a claim's evidence.
+dependency versions alongside it when handing off. New exports preserve full
+cited chunks; preserve older prefix-only outputs for their original evaluation.
+Human judges must follow T4's agreed evidence scope and grading protocol.
 
 Neither successful execution nor valid citation structure establishes semantic
 support, answer correctness or appropriate refusal. T4 performs independent

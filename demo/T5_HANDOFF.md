@@ -21,13 +21,12 @@ This executes two real questions using `qwen3:4b-instruct` on
 and localhost proxy exclusion, and restores those environment variables on exit.
 It refuses API embedding configurations before constructing the pipeline. It
 does not build/clear an index, select a cloud model, export grades or compute
-metrics. Keep Ollama running with this model downloaded. A compatible config
-recipe is in the separately reviewed local Ollama integration PR; do not assume
-an open PR is already merged.
+metrics. Keep Ollama running with this model downloaded. The configuration is
+`demo/ollama.toml`; environment preparation is documented in [OLLAMA.md](OLLAMA.md).
 
 The display separates the actual exported quote from the complete retrieved
 chunk. Older generation exports can contain only a 200-character prefix; the
-full-citation fix is a separate T5 change. Neither source membership nor verbatim
+integrated exporter now retains the full cited chunk for new answers. Neither source membership nor verbatim
 text is a semantic verdict. A live model may abstain on either example; show the
 actual response rather than substituting a prerecorded answer.
 
@@ -89,8 +88,8 @@ prepared. Per-answer diagnostics are local at
 
 The real local demo then ran both examples, displaying a cited cluster-components
 answer and an insufficient-evidence refusal. Its log stays in that raw directory.
-This branch is based on integrated main and does not bundle the still-open
-full-citation export fix: the observed exported prefix and the complete retrieved
-source were therefore displayed separately. No new formal batch or grades were
-created. Full offline pytest: 335 passed, 2 skipped. Ruff passed. These commands
+At that initial validation the demo was independent of the full-citation fix,
+so the exported prefix and complete retrieved source were displayed separately.
+The unified branch now includes that fix. No new formal batch or grades were
+created by that validation. Full offline pytest: 335 passed, 2 skipped. Ruff passed. These commands
 were agent execution, not a personal human rerun or independent grading.

@@ -58,8 +58,8 @@ On 2026-11-20, tests/test_generation.py passed 19 tests, including invalid outpu
 ## Limitations and Failure Cases
 Valid citations and verbatim excerpts do not establish factual support. The original regression test deliberately allows a structurally valid answer that contradicts its evidence. Coverage is heuristic. Provider exceptions are propagated. Batch output is buffered in memory, flushed to a temporary file and published atomically without overwriting an existing destination. Temporary files are cleaned when publication fails. Filesystem metadata durability across power loss is not guaranteed. MOCK retrieval is synthetic and provides no retrieval-quality evidence.
 
-## Pending Integration Work
-As checked on 2026-11-22, PR #15 (T4 QA) and PR #21 (offline I4 handoff check) are merged. PR #11 (T3 retrieval hardening) remains open. Issue #5 remains Open. The integrated QA contains refusal-review signatures; this is distinct from grading generated answers. The user clarified that C3 is not yet confirmed: no provider, model or team approval record has been established for this task. Continue with MOCK until the team confirms the LLM plan. Verify that plan and a matching index before any real call; produce real I4 answers only within the authorized scope, then hand them to T4 for independent grading. No real LLM output or answer-correctness result is claimed here. Shared CLI changes require team review under CONTRIBUTING.
+## Current integration and remaining work
+As checked on 2026-11-22, main includes T3 #11 and T4 #15. This delivery branch consolidates T5 #22, #24 and #25 into #26: local Ollama configuration, full citation export, handoff integrity checks, diagnostics and a live demo. The user reported team agreement to local `qwen3:4b-instruct`; the earlier C3-pending notes below are historical. A 36-answer baseline and separately identified citation-fix smoke outputs exist locally. Preserve the baseline and its grading inputs. Independent human grading and adjudication remain T4 responsibilities and are not attested by this code work. Non-author review and merge remain required; Issue #5 stays Open. No answer-correctness or abstention metric is claimed by T5.
 
 ## Additional validation on 2026-11-20
 The batch command now supports explicit `--mock` with a mandatory MOCK- run ID. Run `python -m ragkit.cli batch --mock --questions demo/questions.csv --run-id MOCK-example --output eval/results/raw/MOCK-example.jsonl`. The scripted synthetic pipeline is in demo/mock_pipeline.py. Two records were exported successfully to the ignored raw directory in an actual CLI run. Temporary-file writing followed by a no-overwrite atomic publication prevents partial output files and preserves concurrent-run safety. On Windows publication uses rename, which fails if the destination exists. On other platforms it uses a hard link. The earlier statement about nontransactional batch writes is superseded by this change.
@@ -101,8 +101,8 @@ confirmed local model/endpoint, refuses API embeddings, shows both exported quot
 and complete source chunks, and restores its temporary environment settings.
 The agent ran both real examples successfully. Full offline tests reported 335
 passed and 2 skipped; Ruff and diff checks passed. The 36-answer grading artifact
-was checked unchanged by SHA-256. This branch's tools are independent of the
-separate full-citation and runtime-configuration PRs.
+was checked unchanged by SHA-256. These tools were first validated independently;
+the unified delivery branch now includes the full-citation and runtime changes.
 
 ### Technical explanation for the report
 
@@ -115,8 +115,8 @@ For example, a model can omit citations despite producing a plausible answer,
 or cite a real but irrelevant chunk. Human semantic grading therefore remains
 separate from structural checks. The prefix-only quote export additionally
 demonstrated that an answer artifact can omit evidence that was visible to the
-model; the complete-chunk export fix is tracked separately and must be identified
-by code version when comparing runs. Preserving original runs and explicit new
+model; the complete-chunk export fix originated in #25 and is included here. Its
+code version must be identified when comparing runs. Preserving original runs and explicit new
 run IDs prevents an engineering fix from silently changing the evaluation input.
 ## Real local Ollama integration (2026-11-22)
 
@@ -133,8 +133,8 @@ A real K01 CLI request returned the control plane and worker nodes with
 `[k8s_v135_components#0000]`; citation ID and verbatim structure checks passed.
 A real KN01 CLI request refused with `model_reported_insufficient_evidence`.
 These are observed behaviors, not independent human grades or correctness rates.
-The exported prefix quote can omit supporting text; semantic grading still
-requires inspecting the full retrieved source.
+That baseline's exported prefix can omit supporting text; the integrated exporter
+now preserves full chunks for new outputs. This does not alter the old baseline.
 
 The original Conda Python 3.12 environment crashed importing ONNX. Independent
 Python 3.11.18 with Chroma 1.5.9 and ONNX Runtime 1.32.0 successfully ingested
