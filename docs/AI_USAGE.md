@@ -241,3 +241,9 @@ PR #14 的冻结 Kubernetes 语料已进入 `main`，PR #15 的正式 QA 人工�
 
 本次由 ChatGPT 在账号持有人请求下检查 PR #11 和最新 main：保全 main 的已有记录并追加原 T3 分支披露；修复 T3 对已移除 `QA_SET_STATUS` 的引用，改用 T4 新增的 `qa_set_status(qa, items)`，不修改 T4 文件。PR #15 的正式 36QA 与全部 10 个拒答人工签名现已合入；PR #23/T2 的正式策略对比数字只作为独立交叉检查，不登记为 T3 实跑。
 本次仅通过 GitHub API 读取源码和组织合并；当前执行容器没有 Chroma/ONNX，且不能联网下载依赖，因此**没有在此环境运行本地模型、真实检索诊断或完整 pytest**。GitHub CI 应在最终 head 上另核查，学生本人阅读/重跑与他人 Approve 仍是待办。不虚构人工签名或实验数据。
+
+### 2026-11-22 T3 冻结输入真实运行（Codex / 本机）
+
+Codex 在 PR #11 的 `c4516bf29317270b876193f66e864f8f053f785f` 独立检出中使用已缓存的 ONNX `all-MiniLM-L6-v2` 与本机 Chroma，实际进行 fixed / paragraph 入库，分别执行 36 道正式 QA 的完整排名诊断并用新进程复查。执行命令、时间、输入和输出指纹见 [RETRIEVAL.md](RETRIEVAL.md)。测试 `143 passed`、全量 `328 passed / 2 skipped`，Ruff 通过。
+
+本轮实验使用本机 embedding，生成、收费 embedding 及 judge 的 API 调用均为 0。Codex 补充了本节、开发记录和检索复跑说明。刘悦伟本人复核与组员 Approve 均待完成。

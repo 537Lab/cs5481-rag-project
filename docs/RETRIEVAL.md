@@ -1,28 +1,66 @@
 # T3 检索层与向量库 / Retrieval and vector storage
 
+## 冻结 Kubernetes 语料复跑（2026-11-22，HKT）
 
-> **2026-11-22 最新状态（以下旧记录保留为历史）**：PR #15 已合并，正式 `eval/qa_set.csv` 已有 36 题（26 answerable，10 unanswerable，全部 10 条拒答由组员填写 `REVIEWED_BY`）；Kubernetes 冻结语料快照 `cs5481-k8s-v135-16docs-36fd3eedf33f` 已可用。PR #23 中 T2 的正式对比为 fixed 668 块、hit@1=8/26、hit@3=18/26；paragraph 775 块、hit@1=10/26、hit@3=17/26，**不属于 T3 重新运行或验证的结果**。
->
-> **当前剩余验收**：T3 的 2026-11-18 四篇开发语料/35QA 检索诊断仍是历史数据；截至本次登记，T3 未在上述正式 36 题上真正重跑本地 Chroma/ONNX。主线 T4 已移除静态 `QA_SET_STATUS`，T3 此次改为动态调用 `qa_set_status(qa, items)`，以避免对正式和开发 QA 错误使用同一标识。合并与接口修复不等于正式诊断；云端 CI 也不能代替本地 ONNX 运行或学生人工复核。
->
-> **在独立 clone 中复跑（不要重建其他人的共享索引）**：先执行 `python -m eval.metrics validate --require-reviewed`、`python -m pytest tests/test_store.py tests/test_embeddings.py tests/test_retrieval_diagnostics.py -q`、`python -m pytest -q`、`python -m ruff check .`、`python -m ragkit.cli ingest`（fixed）。若还要检查 paragraph，按第 10 节示例单独建立 paragraph collection。然后分别运行下列命令；每轮使用新的 gitignored 输出目录，不覆盖已有原始结果。
->
-> ```bash
-> python -m eval.retrieval_diagnostics --qa eval/qa_set.csv --strategy fixed --top-k 3 --min-coverage 0.5 --output-dir eval/results/raw/t3-k8s-20261122-fixed
-> python -m eval.retrieval_diagnostics --qa eval/qa_set.csv --strategy paragraph --top-k 3 --min-coverage 0.5 --output-dir eval/results/raw/t3-k8s-20261122-paragraph
-> ```
->
-> 复跑后核验 `diagnostics.json` 的 36 题、index count、QA/manifest/code SHA256、完整实际深度排名、出处和 `get_chunk` 往返，补入真实时间/命令/模型/失败样本及结果。正式 hit@k 一律来自 T4 `eval/metrics.py`，不要在 T3 另定义指标或把 T2 的数字冒称 T3 实跑。
+Codex 在 macOS arm64 的独立工作副本检出 `c4516bf29317270b876193f66e864f8f053f785f`，用本机已缓存的 ONNX `all-MiniLM-L6-v2`（384 维）和真实 Chroma 完成两轮诊断（`REAL_LOCAL`）。I1 快照 `cs5481-k8s-v135-16docs-36fd3eedf33f` 含 16 篇文档（12 篇 Kubernetes、4 篇 Wikipedia），I2 含 26 道可答题和 10 道有组员 `REVIEWED_BY` 记录的拒答题。T4 校验定位了全部 26 条标准引文。Python 3.14.6，Chroma 1.5.9，ONNX Runtime 1.32.0，NumPy 2.5.5。
 
+两轮使用相同 `top_k=3`、`min_coverage=0.5`、`size=600` 和 `overlap=80` 配置。诊断返回余弦分数原始排名，关闭分数阈值过滤。正式输入身份来自 `provenance.qa_status` 和下方指纹，原始导出沿用 `data_status=DEVELOPMENT` 的工程诊断标识。正式命中率由 T4 `eval/metrics.py` 统一计算。
 
-> **状态更新 / Update（2026-11-21 HKT，GitHub 状态核查）**：PR #14 的 Kubernetes v1.35 冻结语料已合入 `main`（12 个来源页面、16 个清洗文档），因此下方 2026-11-18 所说“尚无 I1 冻结文件”是**当时的历史状态**，不是当前阻塞。此文第 6–8 节的 4 文档／35QA 数据、示例 score、排名和旧快照哈希均仅对应 `CORPUS_V0` 开发实验，**不得标成冻结 Kubernetes 重跑结果**。PR #15 的正式 QA 及 KN01–KN10 人工复核尚未完成；本次同步尚**未**在新语料上实跑 diagnostics，新数据与输出哈希均待真实执行后补入。CI/pytest 不能代替 ONNX 实验，也不能代替学生本人复核。
->
-> **复跑提示（尚未执行）**：先在冻结语料对应的 `main` 环境重建索引：`python -m ragkit.cli ingest`，然后根据当前真实 QA 版本分别选择开发或正式输入运行 `python -m eval.retrieval_diagnostics --qa eval/qa_set.csv --strategy fixed --top-k 3 --min-coverage 0.5 --output-dir eval/results/raw/t3-k8s-fixed-<run-id>`；每次使用新的输出目录，核对报告中的 `corpus_snapshot_sha256`、`qa_sha256`、collection 实际 count、retrieval 和 provenance checks。完成前不要宣称已重跑或通过正式评测。
+| 策略 | Chroma collection | 索引实际 / 预期块数 | 完整排名题数 | 已核对 top-3 条目 | 证据落在前三之外的题数 | 输出时间（HKT） |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| `fixed` | `chunks_fixed` | 668 / 668 | 36 / 36 | 108 / 108 | 8 | 15:06:25 |
+| `paragraph` | `chunks_paragraph` | 775 / 775 | 36 / 36 | 108 / 108 | 9 | 15:06:45 |
 
+独立 Python 进程重新打开两个 collection，用当前切块器生成的预期内容逐字段回查 1443 个持久化块。缺失、额外记录和字段错配均为 0。两种策略共有 667 个同名 ID，分别按 collection 回查，文本、字符区间、标题、来源及许可均与各自策略和原文一致。复核进程还重新查询了 24,048 条 fixed 和 27,900 条 paragraph 排名记录，确认分数有限、按降序排列、rank 连续，并交叉核对 216 条 top-3 CSV/JSON、全部标准引文和 score 分布。
 
-> **状态 / Status（2026-11-18，HKT）**：T3 的代码与开发期真实检索已实现；本文记录的是 **DEVELOPMENT / REAL_LOCAL**，不是正式评测。语料是 `CORPUS_V0` 的 4 篇文章，QA 是 T4 已合入的 35 题开发集。I1 正式冻结文件尚不存在；不能把这些观察写成正式实验结果。`offline-demo` 和确定性测试替身则是 **MOCK**，另行标识。
->
-> **English summary:** T3 hardens Chroma collection isolation, cosine-score semantics, lossless chunk roundtrips and embedding validation. The reusable diagnostic CLI records actual local retrieval, deep gold-evidence ranks, integrity checks and descriptive score distributions. It defines no hit-rate, correctness or abstention metric. Formal evaluation and human review remain team responsibilities.
+### 排名与分数
+
+两种策略中排在前三之外的标准引文都能在更深排名中找到。逐项检查了未命中的题，索引中均有完整覆盖引文的单个块。`K03` 的首个达标块从 fixed 第 29 名到 paragraph 第 10 名，`K21` 则从第 12 名到第 21 名。`K26` 的 paragraph 首个达标块排第 76，score 0.4638，该题第一名 score 0.6319。
+
+| 策略 | top-3 条目组 | 条数 | 最小 score | 中位 score | 最大 score |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `fixed` | 全部 | 108 | 0.2568 | 0.6016 | 0.7760 |
+| `fixed` | 可答题中覆盖达标 | 20 | 0.3907 | 0.6541 | 0.7423 |
+| `fixed` | 可答题中覆盖未达标 | 58 | 0.3031 | 0.6515 | 0.7760 |
+| `fixed` | 拒答题 | 30 | 0.2568 | 0.4541 | 0.6028 |
+| `paragraph` | 全部 | 108 | 0.2830 | 0.5997 | 0.8066 |
+| `paragraph` | 可答题中覆盖达标 | 21 | 0.5872 | 0.6992 | 0.8066 |
+| `paragraph` | 可答题中覆盖未达标 | 57 | 0.3167 | 0.6379 | 0.7712 |
+| `paragraph` | 拒答题 | 30 | 0.2830 | 0.4865 | 0.5992 |
+
+分数组存在重叠。例如 fixed 的拒答题 `KN07` 得到 0.6028 的近邻分数，高于部分覆盖达标的块。这里的 score 只度量向量相似度，针对拒答题的输出属于检索诊断。
+
+### 复现命令与指纹
+
+在有项目依赖和本地 ONNX 模型的独立检出中，从仓库根目录运行。两种策略使用同一个独立的 `data/index/`，已有诊断输出时为 `--output-dir` 选新路径。
+
+```bash
+python -B -m eval.metrics validate --require-reviewed
+python -B -m ragkit.cli ingest
+python -B -c 'from dataclasses import replace; from ragkit.config import load_settings; from ragkit.pipeline import build_pipeline; cfg = replace(load_settings(), chunk_strategy="paragraph"); assert cfg.embedding_provider == "local"; print(build_pipeline(cfg).ingest())'
+python -B -m eval.retrieval_diagnostics --qa eval/qa_set.csv --strategy fixed --top-k 3 --min-coverage 0.5 --output-dir eval/results/raw/t3-k8s-20261122-fixed
+python -B -m eval.retrieval_diagnostics --qa eval/qa_set.csv --strategy paragraph --top-k 3 --min-coverage 0.5 --output-dir eval/results/raw/t3-k8s-20261122-paragraph
+python -B -m pytest -o addopts='' tests/test_store.py tests/test_embeddings.py tests/test_retrieval_diagnostics.py -q
+python -B -m pytest -o addopts='' -q
+python -B -m ruff check .
+```
+
+以上命令均退出 0。T3 定向测试 **143 passed**，全量离线测试 **328 passed / 2 skipped**，Ruff 通过。生成模型和收费评估调用均为 0。
+
+| 校验对象 | SHA-256 |
+| --- | --- |
+| 16 篇加载后文本与出处的快照 | `7cdb126948ccc2b4b554336a7cdd710f4829b0db0d2449e5c2dbaef10bce7030` |
+| `data/raw/manifest.json` | `3e3e4e4217dfd85da16eb217b9b769e8a37efdcadec9ca0d85894df679e5e311` |
+| `data/raw/frozen_manifest.json` | `bddfe36018857fa592e65d26444318c1ffc3435bce84241d9f8229254c9142f9` |
+| `eval/qa_set.csv` | `b01b97fbdf2a466f178b539b86eb3f1ed31ee2a50edef8f6e44703b7fb89be1b` |
+| `config.toml` | `7d10b240b09fa30dff2c96303f2696d27ac09f8d6fdf4815455c19eb605ab503` |
+| `model.onnx` | `4f148ba8ae9c2c7fbee4af2b132db8d06c6a6545b47fc83bbb98c3d22b8393e6` |
+| fixed 本次 `diagnostics.json` | `10053f59412068ef3d6a77b8e57b4b246e8daf6ce6bb71dbbf2708fca42c602e` |
+| paragraph 本次 `diagnostics.json` | `2b829d5bf28f59bdc7c12f1be3378d68090b0e7e6962c511e7da963672cf8dc9` |
+
+冻结清单中 16 个文件的字节哈希、两个 JSON 中记录的 10 个源码 SHA-256 均一致。上述两个 JSON 指纹识别本次输出，文件包含时间与运行路径。原始 JSON、CSV 和直方图位于本地 `eval/results/raw/`。演示与验收仍包含刘悦伟本人复核，以及非作者组员对最终提交的 GitHub Approve。
+
+> 下方第 6–8 节记录 2026-11-18 的四篇开发语料和 35QA 历史实验。
 
 ## 1. T3 在系统中做什么 / Role in the pipeline
 
@@ -137,7 +175,7 @@ python -m eval.retrieval_diagnostics \
 | `unknown_needs_review` | 证据不足，保留人工排查 |
 | `unanswerable_label` | 独立保留 T4 标签和人工复核状态，不进入普通检索失败分析 |
 
-并集覆盖只是定位分块问题的描述量，不是另一套命中率。比如三块各覆盖 gold 的三分之一，即使合起来完整，按共享“单块 ≥50%”标准仍未命中，不能私自将它改成成功。8 条 unanswerable 的 `REVIEWED_BY` 当前为空；近邻分数高不等于题目可回答，缺少某个词也不证明全文没有答案，需 T4 规定的人工判断。
+并集覆盖只是定位分块问题的描述量，不是另一套命中率。比如三块各覆盖 gold 的三分之一，即使合起来完整，按共享“单块 ≥50%”标准仍未命中，不能私自将它改成成功。2026-11-18 开发集的 8 条 unanswerable 当时均没有 `REVIEWED_BY`；近邻分数高不等于题目可回答，缺少某个词也不证明全文没有答案，需 T4 规定的人工判断。
 
 ## 6. 真实运行证据 / DEVELOPMENT observations
 
@@ -220,7 +258,7 @@ k=5 可带回当前判据下的合格证据，但不能凭空把整句合进一�
 
 ## 10. 干净环境复现与测试 / Reproduction
 
-从仓库根目录运行，Python 3.11+；以下命令不改变提交的 `config.toml` 或依赖文件：
+冻结语料及正式 QA 的复跑命令见页首。以下命令留作 2026-11-18 开发实验复现，请在旧提交 `5ec5e36` 的仓库根目录中用 Python 3.11+ 执行。
 
 ```bash
 python3 -m venv .venv
@@ -264,7 +302,7 @@ python -c 'from dataclasses import replace; from ragkit.config import load_setti
 | T4 / I2-I3 | 原文 gold 覆盖、逐题诊断与 source/roundtrip 证据 | 等价 gold、正式 hit@k、正确率与拒答率 |
 | T5 / I4 | 带来源的 `RetrievedChunk` 与稳定 `get_chunk()` | prompt、答案、引用支持性与拒答行为 |
 
-待办：I1 正式冻结、I2 重校验及 unanswerable 人工复核；共享 pipeline/注释问题交相关负责人；不同组员进行 PR review/Approve，由非作者手动合并。AI 独立审查不等于组员批准。本人仍须读代码、亲自运行关键命令并理解设计，真实记录在 AI_USAGE/DEV_LOG；不能由代理代签贡献比例或声称已完成人工复核。
+I1 和 I2 的冻结输入已用于本页复跑。共享 pipeline 与注释问题由对应负责人跟进。刘悦伟本人仍需阅读实现、复跑关键命令并据实登记个人复核。PR #11 由另一位组员审核，对最终提交 Approve，之后由非作者手动合并。
 
 ## 12. 展示时可以讲什么 / Presentation outline
 
@@ -273,7 +311,7 @@ python -c 'from dataclasses import replace; from ragkit.config import load_setti
 1. **问题（约一分钟）**：同一份文章切成两种块，ID 可以相同；不隔离会互相覆盖，丢出处也无法回查引用。
 2. **实现（约一分钟）**：本地 384 维向量 → cosine Chroma → score/rank/出处；策略隔离、输入校验、完整元数据往返，不只是让查询“有输出”。
 3. **证据（约一分钟）**：现场 retrieve，展示字符区间和 `get_chunk()`；解释两种 collection 的独立进程持久化验证。不要用 MOCK 演示冒充真实结果。
-4. **失败（约一分钟）**：A17 的指定证据在第 8 名；A18 引文跨边界但按 50% 判据是第 5 名的排序问题；A03 则暴露单一 gold 可能漏掉等价证据。
+4. **失败（约一分钟）**：冻结集 K03 的首个达标块在 fixed 排第 29、paragraph 排第 10。回查原文可见两套索引都有完整引文，两次问题都出在前三名排序。
 5. **取舍（约一分钟）**：高分不等于正确，阈值无法干净区分两类；提高 k 有上下文代价；未来 BM25/hybrid 值得验证但本轮没擅自扩展。
 
 老师可能问：
