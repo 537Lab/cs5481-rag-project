@@ -331,7 +331,9 @@ def test_payload_rejects_strategies_that_do_not_share_parameters():
 def test_development_out_cannot_land_inside_summary():
     relative = Path("eval") / "results" / "summary" / "chunking_comparison"
     nested = Path("eval") / "results" / "raw" / ".." / "summary" / "chunking_comparison"
+    published = ROOT / "eval" / "results" / "summary" / "chunking_comparison"
     for target in (relative, nested, SUMMARY_DIR / "chunking_comparison"):
+        before = _snapshot(published)
         with pytest.raises(QASetError, match="cannot write a development run"):
             resolve_destination(
                 formal=False,
@@ -340,9 +342,10 @@ def test_development_out_cannot_land_inside_summary():
                 summary_dir=SUMMARY_DIR / "chunking_comparison",
                 raw_dir=target,
             )
-        assert not (ROOT / "eval" / "results" / "summary" / "chunking_comparison").exists()
+        assert _snapshot(published) == before
+    before = _snapshot(published)
     assert main(["--out", str(relative)]) == 2
-    assert not (ROOT / relative).exists()
+    assert _snapshot(published) == before
 
 
 def test_development_out_rejects_a_symlink_into_summary(tmp_path):
@@ -370,6 +373,16 @@ def test_development_out_rejects_a_symlink_into_summary(tmp_path):
         )
 
 
+def _snapshot(directory: Path) -> list[tuple[str, bytes]]:
+    if not directory.exists():
+        return []
+    return sorted(
+        (path.relative_to(directory).as_posix(), path.read_bytes())
+        for path in directory.rglob("*")
+        if path.is_file()
+    )
+
+
 def test_formal_rejects_dev_and_arbitrary_qa_paths(tmp_path):
     summary = tmp_path / "summary" / "chunking_comparison"
     body = DEFAULT_QA.read_text(encoding="utf-8")
@@ -386,8 +399,10 @@ def test_formal_rejects_dev_and_arbitrary_qa_paths(tmp_path):
                 qa_path=qa_file,
             )
         assert not summary.exists()
+    summary = SUMMARY_DIR / "chunking_comparison"
+    before = _snapshot(summary)
     assert main(["--formal", "--qa", str(tmp_path / "qa_set_dev_v0.csv")]) == 2
-    assert not (SUMMARY_DIR / "chunking_comparison").exists()
+    assert _snapshot(summary) == before
 
 
 def test_formal_bundle_keeps_the_hit_rate_objects(tmp_path):
@@ -431,3 +446,6 @@ def test_formal_bundle_keeps_the_hit_rate_objects(tmp_path):
     assert metrics["strategies"][0]["hit@1"] == hit_at_1
     assert metrics["strategies"][0]["hit@3"] == hit_at_3
     assert "answer_correctness" not in metrics
+    chart = (directory / "hit_rates.svg").read_text(encoding="utf-8")
+    assert "1/2 (0.5)" in chart
+    assert "2/2 (1.0)" in chart
