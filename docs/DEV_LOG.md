@@ -101,3 +101,34 @@ PR 历史与 commit message 是贡献比例的**证据来源**，本文件只是
 ```
 | 日期 (GMT+8) | 阶段/任务 | 实际执行者 | 做了什么（含 PR 号） | 验证来源（本地命令 / 云端 CI，分开写） | 本人复核了什么 |
 ```
+
+## T3 追加记录 / Retrieval delivery（2026-11-18）
+
+本节仅追加本轮事实，以上旧状态不替代当前 GitHub 核验。
+
+| 阶段 | 实际执行者 | 工作与证据 | 人工状态 |
+| --- | --- | --- | --- |
+| 现状与基线 | Hermes Agent | 核对 Issues/PR/main；PR #7/#8 已合入、#10 核查时仍 open；新隔离 clone，`t3-retrieval-diagnostics` 从 `4f865c10232f8d7890e9e1c019569276bcb9638e` 起步，无原有修改被覆盖。基线 124 passed / 2 skipped，Ruff 通过；项目独立 `.venv`，未修改依赖文件 | 本人尚未亲自复跑 |
+| 实现与首次整合 | Hermes + Codex CLI Luna High / Sol Medium | TDD 增强向量库/Embedding，新增可导入诊断 CLI、自己的诊断测试和 RETRIEVAL 文档；首次整合 66 个 store/embedding 测试通过、全量 200 passed / 2 skipped、Ruff/help/offline-demo/ingest/retrieve/35QA 诊断通过 | Agent 执行，非人工批准 |
+| 真实开发期验证 | Hermes Agent | 4 文档，fixed 28 块、paragraph 33 块；28 个同名 ID 跨集合隔离；重复 upsert 幂等，clear paragraph 不改 fixed；另一个 Python 进程逐字段回查两集合 61 块。105 条 top-k 回查与原文出处一致。A03/A14/A17/A18 本轮指定 gold 的首个达标 rank 为 6/4/8/5；A18 不能照抄旧的纯边界失败结论 | DEVELOPMENT / REAL_LOCAL；非正式指标 |
+| 独立审查与修复 | 独立 Sol High Reviewer + 新 Sol Medium 修复 Worker + 主控 | 首轮实际复现多客户端策略污染与 float32 cosine 数值问题，另发现分箱边界及薄弱 NaN 测试。主控为直方图精确边界和导入 API 歧义补 RED/GREEN；存储/Embedding 修复、最终回归与复查结果在 PR 记录 | 仍须其他组员 review / Approve；贡献比例和签名不代填 |
+
+原始逐条输出与输入/代码指纹保留在执行者本地交接包及 gitignored `eval/results/raw/`；每轮诊断含真实命令、UTC 日期、内容快照 SHA256、模型、collection 和参数。正式 I1 冻结未到位，未运行生成/付费 API，未发布 T3 自定义命中率。最终质量门禁与远端 CI 不以首次整合结果冒充，见本 PR 最新验收记录。
+
+**最终本地验收（2026-11-18 04:41 HKT，Agent 执行）**：`pytest tests/test_store.py tests/test_embeddings.py` 106 passed；诊断测试 37 passed；全量 257 passed / 2 skipped；`ruff check .`、diagnostics `--help`、T4 `validate`、MOCK `offline-demo`、真实 `ingest` / `retrieve`、双集合独立进程回查与 35QA 诊断均通过。最终原始输出在 gitignored `eval/results/raw/t3-20261118-fixed-final/`；105 条 top-k 回查成功、每题深度排名完整，代码 SHA256 与运行版本一致。I1 缺失、unanswerable 人工复核 0/8，因此不称正式实验。云端 CI 与组员批准仍须看 PR 实际状态。
+
+**独立终审**：Sol High 在修复后独立运行三个受影响文件 143 passed，结论通过、无阻断逻辑/安全缺陷；主控比对六个代码/测试 SHA256 与被审版本完全一致，并修掉文档 EOF 空行。另行真实跨进程并发写入检查中，一方写入、一方拒绝混策略，第三进程重开只有一种策略（Chroma 真实、向量 MOCK，零模型调用）。Windows 分支与大规模性能仍未验证；组员人工批准未代办。
+
+### 2026-11-21 T3 后续状态（Agent 核查 GitHub）
+
+同步最新 `main`，保留 T1/T2/T4/T5 的现有记录和 T3 原始追加部分，且未调整其他成员历史声明。冻结语料文件现已存在；本轮仅整理 Git 历史和文档，不将旧四篇开发语料的 35QA 检索观察作为 Kubernetes 结果。冻结语料上的 T3 diagnostics、真实运行产物与学生本人重跑仍待完成；PR #15 的拒答人工复核仍未关闭。
+
+### 2026-11-22 T3 最新集成状态（ChatGPT / GitHub 连接）
+
+主线已完成 I1 冻结语料和 I2 36QA/10 条人工 REVIEWED_BY，T2 通过 PR #23 提交正式策略比较；本轮将 T3 修改与主线整合，保留各任务成员的文档记录，并修复 T3 原导入不存在的 T4 `QA_SET_STATUS` 常量（改用动态 `qa_set_status()`）。这项改动仅为接口兼容与分支同步，**非**冻结 Kubernetes 36QA 真实 T3 诊断。待执行本地 ONNX/Chroma ingest、fixed/paragraph diagnostics、来源与 rank 核验、真实运行记录；云端 CI 和组员人工审查应另行核对。
+
+### 2026-11-22 T3 冻结输入复跑（HKT，Codex 本机执行）
+
+在 PR #11 `c4516bf29317270b876193f66e864f8f053f785f` 的干净工作副本中运行 T4 `validate --require-reviewed`，确认 16 篇冻结文档和 36 题（26 条引文定位，10 条拒答有组员复核）。用本地 ONNX + Chroma 重新入库 fixed 668 块、paragraph 775 块，每个 collection 跑完 36 道题的完整排名。新进程读回两套索引，全部 1443 块及 216 条 top-3 的原文出处和字段回查一致。
+
+定向测试 143 passed，全量 328 passed / 2 skipped，Ruff 通过。排名案例、真实命令与 SHA-256 见 [RETRIEVAL.md](RETRIEVAL.md)。原始产物在 `eval/results/raw/`。执行记录为 Codex 本机验证。组员审批和本人复核待完成。
