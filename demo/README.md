@@ -2,6 +2,7 @@
 
 For the real local demonstration, per-answer diagnosis and final delivery
 checklist, see [T5_HANDOFF.md](T5_HANDOFF.md).
+For the separately configured real local-model workflow, see [OLLAMA.md](OLLAMA.md).
 
 Run from the repository root with Python 3.11 or newer.
 

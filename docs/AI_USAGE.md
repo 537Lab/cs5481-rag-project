@@ -200,6 +200,25 @@ ran the real local demonstration. Full offline pytest: 335 passed, 2 skipped;
 Ruff and diff checks passed. No prompt/gate tuning, new formal batch, human grades,
 signatures or metric implementation was introduced. Human personal rerun,
 non-author code review and T4 independent semantic grading remain pending.
+## T5 local Ollama integration (2026-11-22)
+
+Codex acted on the user's report of team agreement to use local Ollama
+`qwen3:4b-instruct`; no separate GitHub decision link was supplied. Added a
+T5-specific configuration and reproduction guide without editing shared config,
+T1-T4 implementation, frozen inputs or human signatures. Agent execution verified
+frozen source hashes and the reviewed-QA gate, created a dedicated 668-chunk index,
+and ran one real cited answer and one real refusal through the existing CLI.
+Conda Python 3.12 crashed importing ONNX; an independent Python 3.11 environment
+worked. Full offline pytest: 195 passed, 2 skipped. Ruff passed. Raw logs and
+model/runtime provenance stay in ignored local files. These are agent executions;
+human personal rerun and independent answer grading remain pending. No paid API
+or fabricated result was used.
+
+The agent subsequently completed the standard local-model batch for 36 frozen
+QA rows (exit 0), recorded model digest and runtime/input provenance, and verified
+T4 loading plus artifact integrity against the reopened index. Raw answers and
+the handoff ZIP remain ignored local files. No human grades or metrics were
+invented or entered; T4 independent answer grading remains pending.
 
 ## T5 additional records
 
