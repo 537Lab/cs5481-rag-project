@@ -247,3 +247,10 @@ PR #14 的冻结 Kubernetes 语料已进入 `main`，PR #15 的正式 QA 人工�
 Codex 在 PR #11 的 `c4516bf29317270b876193f66e864f8f053f785f` 独立检出中使用已缓存的 ONNX `all-MiniLM-L6-v2` 与本机 Chroma，实际进行 fixed / paragraph 入库，分别执行 36 道正式 QA 的完整排名诊断并用新进程复查。执行命令、时间、输入和输出指纹见 [RETRIEVAL.md](RETRIEVAL.md)。测试 `143 passed`、全量 `328 passed / 2 skipped`，Ruff 通过。
 
 本轮实验使用本机 embedding，生成、收费 embedding 及 judge 的 API 调用均为 0。Codex 补充了本节、开发记录和检索复跑说明。刘悦伟本人复核与组员 Approve 均待完成。
+
+### 2026-11-22 T3 合并后维护（Draft PR #27；ChatGPT / GitHub 连接）
+
+- 用户授权继续推进 T3 后，ChatGPT 通过 GitHub 连接只读审查已合并 `ragkit/store.py` 与 `tests/test_store.py`，发现先打开的第二个 Chroma 客户端在首个客户端 `clear()` 重建 collection 后可能保留过期 UUID 的读路径。创建独立分支 `t3-postmerge-read-rebind`；仅在 T3 自有 `tests/test_store.py` 中新增真实 Chroma 回归测试。
+- GitHub Actions [RED run 45028359710](https://github.com/537Lab/cs5481-rag-project/actions/runs/45028359710) 复现该故障：`test_preopened_client_reads_after_other_client_rebuild` 的 `second.count()` 报 `chromadb.errors.NotFoundError`。这是真实云端运行证据，不是模型推测。
+- ChatGPT 随后仅在 `ragkit/store.py` 中添加按需的 stale-reader 重绑定：正常读取不追加查找，读操作因 collection UUID 失效抛出 `NotFoundError` 时，使用 collection 写锁获取当前句柄并校验策略绑定，然后重试一次；同时更新 `docs/RETRIEVAL.md`。后续 GREEN / 最终精确 HEAD 以 PR #27 的 CI 记录为准。
+- 当前助手环境没有本机 Chroma/ONNX 运行依赖，未在用户 Mac 上亲手重跑；上述实测来自 GitHub Actions。没有收费 embedding / LLM / judge 请求，没有修改冻结语料、正式 QA、T4 指标、旧 raw 实验产物或其他模块。AI 编码/日志不冒充学生本人亲自验收，也不冒充非作者组员的人工 APPROVED / merge。
