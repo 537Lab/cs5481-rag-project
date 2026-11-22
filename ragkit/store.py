@@ -17,15 +17,17 @@ from __future__ import annotations
 import json
 import math
 import os
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from contextlib import contextmanager
 from dataclasses import replace
 from hashlib import sha256
 from numbers import Real
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from ragkit.contracts import Chunk, RetrievedChunk
+
+_ReadResult = TypeVar("_ReadResult")
 
 
 @contextmanager
@@ -209,7 +211,24 @@ class ChromaStore:
         embeddings = records["embeddings"]
         return len(embeddings[0]) if embeddings is not None and len(embeddings) else None
 
+    def _retry_stale_read(self, operation: Callable[[], _ReadResult]) -> _ReadResult:
+        """Rebind only when a peer has replaced our Chroma collection UUID."""
+        from chromadb.errors import NotFoundError
+
+        try:
+            return operation()
+        except NotFoundError:
+            # Peer clear() uses this lock while deleting/recreating the collection.
+            # Refresh under the same lock; normal reads avoid another backend lookup.
+            with _collection_write_lock(self.index_dir, self.collection_name):
+                self._collection = self._client.get_collection(name=self.collection_name)
+                self._read_binding()
+                return operation()
+
     def search(self, query_vector: Sequence[float], k: int) -> list[RetrievedChunk]:
+        return self._retry_stale_read(lambda: self._search_current(query_vector, k))
+
+    def _search_current(self, query_vector: Sequence[float], k: int) -> list[RetrievedChunk]:
         total = self.count()
         if total == 0 or k <= 0:
             return []
@@ -241,13 +260,16 @@ class ChromaStore:
         ]
 
     def get_chunk(self, chunk_id: str) -> Chunk | None:
+        return self._retry_stale_read(lambda: self._get_chunk_current(chunk_id))
+
+    def _get_chunk_current(self, chunk_id: str) -> Chunk | None:
         result = self._collection.get(ids=[chunk_id], include=["documents", "metadatas"])
         if not result["ids"]:
             return None
         return _chunk_from_record(result["ids"][0], result["documents"][0], result["metadatas"][0])
 
     def count(self) -> int:
-        return int(self._collection.count())
+        return self._retry_stale_read(lambda: int(self._collection.count()))
 
     def clear(self) -> None:
         """Drop and recreate the collection. Used by `cli ingest` for a clean rebuild."""
