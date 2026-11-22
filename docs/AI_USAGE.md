@@ -247,3 +247,21 @@ PR #14 的冻结 Kubernetes 语料已进入 `main`，PR #15 的正式 QA 人工�
 Codex 在 PR #11 的 `c4516bf29317270b876193f66e864f8f053f785f` 独立检出中使用已缓存的 ONNX `all-MiniLM-L6-v2` 与本机 Chroma，实际进行 fixed / paragraph 入库，分别执行 36 道正式 QA 的完整排名诊断并用新进程复查。执行命令、时间、输入和输出指纹见 [RETRIEVAL.md](RETRIEVAL.md)。测试 `143 passed`、全量 `328 passed / 2 skipped`，Ruff 通过。
 
 本轮实验使用本机 embedding，生成、收费 embedding 及 judge 的 API 调用均为 0。Codex 补充了本节、开发记录和检索复跑说明。刘悦伟本人复核与组员 Approve 均待完成。
+
+
+### 2026-11-22 T4 I4 汇总与 metrics CLI 缺陷修复（Qoder 编码 agent）
+
+本节由 agent 撰写。agent 完成的是可机械复核的部分：接收并解压 T5 交接包、复算 zip 与 jsonl 的 sha256、
+做 qid 双向差集、12 条引用逐字回查、从冻结快照重建 chunker 得到 668 chunks 以对齐对方自检、
+运行 `python -m eval.metrics score --formal` 生成 `eval/results/summary/i4_answer_metrics/`、
+修改 `eval/metrics.py`（`_command_line()` 改 `shlex.join`；`--grades` 改 `append` 并对重复传参 `exit=2`）、
+把 `eval/judge_protocol.md` 与 `eval/README.md` 的评分表路径从被忽略的 `eval/results/raw/` 移到 `eval/review/`、
+新增 2 条测试，并在本机执行 `ruff check .` 与 `python -m pytest -o addopts="" -q`（330 passed / 2 skipped）。
+
+`run.md` 里的 `executor` 由 agent 显式写成「coding agent …; human rerun pending」，
+没有使用缺省的 `git config user.name`：否则一次 agent 执行会被记成组员本人跑过。
+
+没有 AI 参与、也不允许 AI 代做的部分：26 条 answerable 的语义评分、评分者一致性计算、
+以及任何 `REVIEWED_BY` 签名。本轮**没有产生正确率数字**，`answer_correctness` 保持
+`pending human grading`；`citation_structure_rate 12/12` 是结构校验，不作为事实正确性引用。
+全程离线，未调用付费 API，未使用 AI 生成的模拟结果。

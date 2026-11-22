@@ -1419,3 +1419,66 @@ wrote eval/results/summary/chunking_comparison/hit_rates.svg
 
 同日稍后只重画了 `hit_rates.svg`。原先 hit@1 的数字从 x=244 画起，盖住了 x=292 的 hit@3 柱。现在每列先留 96px 的柱槽，数字写在柱槽右边。画布从 460 加到 596。数字仍是上面这张表，没有重跑检索，`generated_at` 仍是 `2026-11-22T02:13:25+00:00`。
 
+
+
+## 13. I4 首轮真实答案的核验与正式汇总入库（2026-11-22，T4 第三轮，编码 agent 执行，组员未重跑）
+
+### 13.1 输入与执行主体
+
+T5 交付 PR #24（head `629ac1e`），并另发本地交接包 `T5-Ollama-I4-handoff-20261122.zip`
+（8193 B，`sha256 c464299a231e59130f22360c57549fb2ce1ceef284b813efa8d49a3367d4bd85`），内含 36 条答案
+`LOCAL-ollama-fixed-20261122.jsonl`（`sha256 2ca74fde05a52da95c1c0b7b712ddea38ed20ce2a78cdac23775cb1b96346076`）。
+T5 自己的 `run.json` 写明 `executor: "Codex agent; not a personal human rerun"`、`model: qwen3:4b-instruct`、
+`source_commit: 1963537`（即当时的 `origin/main`），批次耗时 261 秒（05:30:17→05:34:38，exit 0）。
+交接包正文明确要求 "Raw files and this ZIP must not be committed to Git"，所以本轮不代 T5 决定入库，
+答案原件仍不在仓库里；T4 只在 `PROVENANCE.md` 里登记哈希。
+
+### 13.2 不复用对方结论，逐项重算
+
+| T5 的断言 | T4 的复核方式 | 结果 |
+| --- | --- | --- |
+| 36 条可被 T4 读取 | `load_outputs` / `score` | exit=0，records=36 |
+| qid 完整 | 与 `eval/qa_set.csv` 做双向差集 | 无缺无多 |
+| 引用可用 | 12 条 citation 的 quote 在所指 chunk 内逐字回查 | 12/12 命中 |
+| 索引一致 | 由冻结快照重建 fixed 600/80 chunker | 668 chunks，等于 `handoff_check.json.index_chunks` |
+| 输入绑定 | 重算 `qa_set.csv`、`frozen_manifest.json`、`demo/ollama.toml` 的 sha256 | `b01b97fbdf2a` / `bddfe3601885` / `51ecccc7ff97` 全部吻合 |
+| CI 已通过 | 在 `pr/24` 的干净 worktree + 仓库 `.venv` 复跑 | `195 passed, 2 skipped`，`ruff` 通过（云端 run id 未复核，仅本地等价复现） |
+
+### 13.3 机检指标与正式汇总
+
+`eval/results/summary/i4_answer_metrics/`（`config.json` / `metrics.json` / `run.md` / `PROVENANCE.md`）：
+
+- `correct_abstention_rate 10/10 = 1.0`
+- `false_abstention_rate 14/26 = 0.5385`（26 条 answerable 中只作答 12 条）
+- `citation_structure_rate 12/12 = 1.0`（结构校验，不得当作正确率）
+- `answer_correctness = pending human grading`，`grading_coverage 0/26`
+- `hit@1 8/26 = 0.3077`、`hit@3 18/26 = 0.6923`
+
+`--executor` 显式写成编码 agent，没有用缺省值：缺省会取 `git config user.name`，
+那会把一次 agent 执行记成组员本人跑过。
+
+### 13.4 本轮顺手修掉的三个 T4 侧缺陷
+
+1. `_command_line()` 用空格拼接 argv，导致 `run.md` 里带空格的 `--executor` 被记成十几个参数，
+   与同一文件 "Reproduce with the command above" 的承诺矛盾 → 改用 `shlex.join`，补 1 条测试。
+2. `--grades` 原为单值 flag，`--grades A --grades B` **静默只取 B**，一次单人评分可以被报成
+   「两位评分人一致」→ 改 `action="append"` 并在 `main()` 里对重复 flag 直接 `exit=2`，补 1 条测试。
+3. `eval/judge_protocol.md` 与 `eval/README.md` 把填好的评分表指向 `eval/results/raw/`，
+   而该目录被 `.gitignore` 忽略，等于唯一支撑正确率的人工判断不会入库 → 改指
+   `eval/review/grades_<run_id>.csv`（`eval/review/` 已跟踪）。
+
+### 13.5 两条必须一起看的口径
+
+量表规定 evasive 记 `incorrect`，`grading_coverage` 的分母是全部 26 条 answerable，因此：覆盖满 26 条时
+`answer_correctness` 上界为 `12/26 = 0.4615`；只评 12 条已作答的题则可达 `12/12 = 1.0`，但覆盖率同时掉到
+`12/26 = 0.4615`，按 `judge_protocol.md` §1 属 smoke test 而非结果。两个数必须并列汇报。
+
+14 条误拒答中，按 `first_hit_rank` 有 7 条 gold 已在 top-3（rank1：`K09 K26`；rank2：`K02 K15 K20 K22`；
+rank3：`K24`）；按「gold 引文逐字落在召回 chunk 内」的严格口径只有 4 条（`K09 K20 K22 K24`）。
+前者属生成侧过度拒答，后者与检索侧 `hit@3 = 0.6923` 相关。逐条评分材料在 `.tmp/i4_grading_pack.md`（按约定未入库）。
+
+### 13.6 仍未做
+
+- 26 条 answerable 的人工语义评分与评分者一致性，须由两位非出题人按 `eval/judge_protocol.md` 完成；
+- 答案原件是否入 `eval/answers/` 由 T5 决定（本轮已实测 `score --run-id` 能从该目录读取并复现同一组数字）；
+- 组员本人重跑本轮任何命令；本 PR 的 `ci / check`。

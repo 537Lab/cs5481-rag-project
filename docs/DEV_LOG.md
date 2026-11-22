@@ -132,3 +132,22 @@ PR 历史与 commit message 是贡献比例的**证据来源**，本文件只是
 在 PR #11 `c4516bf29317270b876193f66e864f8f053f785f` 的干净工作副本中运行 T4 `validate --require-reviewed`，确认 16 篇冻结文档和 36 题（26 条引文定位，10 条拒答有组员复核）。用本地 ONNX + Chroma 重新入库 fixed 668 块、paragraph 775 块，每个 collection 跑完 36 道题的完整排名。新进程读回两套索引，全部 1443 块及 216 条 top-3 的原文出处和字段回查一致。
 
 定向测试 143 passed，全量 328 passed / 2 skipped，Ruff 通过。排名案例、真实命令与 SHA-256 见 [RETRIEVAL.md](RETRIEVAL.md)。原始产物在 `eval/results/raw/`。执行记录为 Codex 本机验证。组员审批和本人复核待完成。
+
+
+### 2026-11-22 T4 I4 首轮答案核验与正式汇总入库（编码 agent 执行，组员未重跑）
+
+读取 T5 交接包（zip `c464299a…d4bd85`、36 条答案 jsonl `2ca74fde…346076`），不复用对方自检：
+qid 双向差集、12/12 引用逐字回查、由冻结快照重建 668 chunks 对齐 `handoff_check.json.index_chunks`、
+核对 `qa_set.csv` / `frozen_manifest.json` / `demo/ollama.toml` 三处 sha256。
+`python -m eval.metrics score --formal` 生成 `eval/results/summary/i4_answer_metrics/`，
+机检结果 correct_abstention 10/10、false_abstention 14/26=0.5385、citation_structure 12/12、
+hit@1 0.3077、hit@3 0.6923，`answer_correctness` 仍为 pending human grading（0/26 已评）。
+
+同轮修掉 metrics CLI 两处会造出假记录的缺陷：`run.md` 记录的命令行不加引号（与「按上面命令复现」自相矛盾）、
+`--grades` 重复传时静默只取最后一个（单人评分可被当成两位评分人）；并把 `judge_protocol.md` 与 `eval/README.md`
+指定的评分表路径从被 gitignore 的 `eval/results/raw/` 改到已跟踪的 `eval/review/`。
+本机 `ruff check .` 通过、`pytest` **330 passed / 2 skipped**；`validate --require-reviewed` exit=0。
+
+答案原件按 T5 的指示不入 Git，所以这份汇总是「按哈希可核」而非「按 CI 可复现」；要在 CI 里复现，
+需要 T5 把 jsonl 放进 `eval/answers/<run_id>.jsonl`（`score --run-id` 已实测可用）。
+人工评分、评分者一致性、`REVIEWED_BY` 之外的语义判断均未做，不由 agent 代填。云端 `ci / check` 待本 PR 触发。

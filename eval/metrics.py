@@ -96,6 +96,7 @@ import csv
 import hashlib
 import json
 import re
+import shlex
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
@@ -344,9 +345,12 @@ def _command_line() -> str:
     replaces the recorded arguments with the ones it was actually given, so a
     caller that imports ``main()`` (T2's experiment script) still gets truthful
     provenance instead of the driver's own command line. Path arguments are
-    shortened the same way as everywhere else in the envelope.
+    shortened the same way as everywhere else in the envelope. Values are quoted
+    because ``run.md`` tells the reader to reproduce with this exact line: a
+    free-text ``--executor`` with spaces would otherwise read back as many
+    separate arguments.
     """
-    return " ".join(
+    return shlex.join(
         ["python", "-m", "eval.metrics", *(_relative(part) for part in _COMMAND_ARGS)]
     )
 
@@ -1351,7 +1355,11 @@ def cmd_score(args: argparse.Namespace) -> int:
             f"--run-id {args.run_id!r} does not match the run_id "
             f"{provenance['run_id']!r} recorded in {_relative(outputs_path)}"
         )
-    grades = load_grades(args.grades) if args.grades else None
+    # ``append`` on --grades exists only to make a repeated flag visible; the
+    # check itself runs in ``main()`` so it fires before any index or artifact
+    # is touched. Correctness comes from ONE reconciled sheet.
+    grade_files = list(args.grades or [])
+    grades = load_grades(grade_files[0]) if grade_files else None
     if args.label == "REAL" and looks_scripted(provenance["models"]):
         print(
             "WARNING: --label REAL, but every record in this artifact names a scripted "
@@ -1381,7 +1389,7 @@ def cmd_score(args: argparse.Namespace) -> int:
         settings, items, qa_path=args.qa, min_coverage=args.min_coverage
     ) | {
         "outputs_file": _relative(outputs_path),
-        "grades_file": _relative(args.grades) if args.grades else None,
+        "grades_file": _relative(grade_files[0]) if grade_files else None,
         **provenance,
     }
     print(f"[{result.label}] scoring answer run: {_relative(outputs_path)} "
@@ -1620,7 +1628,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="look for eval/answers/<run-id>.jsonl instead of passing --outputs",
     )
     score.add_argument(
-        "--grades", type=Path, default=None, help="human grading csv (see judge_protocol.md)"
+        "--grades",
+        action="append",
+        type=Path,
+        metavar="CSV",
+        help="human grading csv (see judge_protocol.md); exactly one, so a "
+        "repeated flag fails instead of silently keeping the last sheet",
     )
     score.add_argument(
         "--grading-sheet", type=Path, default=None, help="write an empty grading sheet here"
@@ -1633,12 +1646,33 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _reject_duplicate_flags(args: argparse.Namespace) -> None:
+    """Refuse a file flag that only makes sense once, instead of keeping the last.
+
+    With the original single-value action, ``--grades a.csv --grades b.csv``
+    silently scored only ``b.csv`` - the likeliest way for one person's sheet to
+    reach the report as "two independent raters agreed". The two sheets must be
+    reconciled first: disagreements go to a third reader, whose call becomes the
+    single recorded grade (``eval/judge_protocol.md`` §1).
+    """
+    grades = getattr(args, "grades", None)
+    if isinstance(grades, list) and len(grades) > 1:
+        raise QASetError(
+            "--grades takes exactly one csv, got "
+            f"{len(grades)} ({', '.join(_relative(p) for p in grades)}). Reconcile "
+            "the two sheets into one file per eval/judge_protocol.md before scoring; "
+            "the reason they must be reconciled by a human is exactly why they are "
+            "not accepted as two inputs here."
+        )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     global _COMMAND_ARGS
     if argv is not None:
         _COMMAND_ARGS = [str(part) for part in argv]
     args = build_parser().parse_args(argv)
     try:
+        _reject_duplicate_flags(args)
         return int(args.func(args))
     except QASetError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

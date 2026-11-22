@@ -17,6 +17,7 @@ from __future__ import annotations
 import csv
 import json
 import re
+import shlex
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -622,6 +623,28 @@ def test_grades_file_without_grade_column_is_rejected(tmp_path):
         load_grades(path)
 
 
+def test_two_grades_sheets_are_refused_instead_of_one_silently_winning(tmp_path, capsys):
+    """`--grades A --grades B` must not score only the last sheet.
+
+    Correctness is the one number a human produces, and the protocol asks for two
+    independent raters. A single-value flag quietly kept B, so one person's sheet
+    could reach the report as a graded run; the CLI now rejects the duplicate
+    before it reads an artifact or an index.
+    """
+    sheets = []
+    for name, grade in (("raterA.csv", "correct"), ("raterB.csv", "incorrect")):
+        path = tmp_path / name
+        path.write_text(f"qid,grade\nK01,{grade}\n", encoding="utf-8")
+        sheets.append(str(path))
+    assert metrics_module.main(["score", "--grades", sheets[0], "--grades", sheets[1]]) == 2
+    assert "exactly one csv" in capsys.readouterr().err
+
+    # One sheet still passes this guard: any later failure must be about inputs,
+    # never about the grade flags themselves.
+    assert metrics_module.main(["score", "--grades", sheets[0]]) == 2
+    assert "exactly one csv" not in capsys.readouterr().err
+
+
 def test_outputs_file_accepts_list_or_items_key(tmp_path):
     wrapped = tmp_path / "wrapped.json"
     wrapped.write_text(json.dumps({"items": [{"qid": "M01"}]}), encoding="utf-8")
@@ -669,6 +692,25 @@ def test_command_line_follows_the_arguments_main_was_given(monkeypatch):
         "python -m eval.metrics retrieval --chunking paragraph --hits 1,3 "
         "--out eval/results/raw/x.json"
     )
+
+
+def test_command_line_quoting_survives_a_copy_paste(monkeypatch):
+    """run.md says "reproduce with the command above", so the line must parse back.
+
+    Plain space-joining turned a multi-word ``--executor`` into a dozen bogus
+    arguments, which made the recorded provenance unrunnable and deniable.
+    """
+    monkeypatch.setattr(
+        metrics_module,
+        "_COMMAND_ARGS",
+        ["score", "--executor", "two raters, independently", "--formal"],
+    )
+    line = metrics_module._command_line()
+    assert shlex.split(line) == [
+        "python", "-m", "eval.metrics", "score", "--executor",
+        "two raters, independently", "--formal",
+    ]
+    assert "'two raters, independently'" in line
 
 
 # ---------------------------------------------------------------------------

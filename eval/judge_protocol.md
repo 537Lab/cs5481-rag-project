@@ -47,11 +47,19 @@ that T5 produces (interface I4, `eval/answers/<run_id>.jsonl`):
 
 ```
 python -m eval.metrics score --run-id <run_id> \
-    --grading-sheet eval/results/raw/grades.csv    # write the blank sheet
-# two raters fill in the grade column independently, then:
+    --grading-sheet eval/review/grades_<run_id>.csv   # write the blank sheet
+# each rater fills the grade column in a private copy; the two copies are then
+# reconciled (Adjudication below) into ONE sheet at this path, and:
 python -m eval.metrics score --run-id <run_id> \
-    --grades eval/results/raw/grades.csv           # read it back
+    --grades eval/review/grades_<run_id>.csv          # read it back
 ```
+
+`--grades` takes exactly one csv: `score` exits 2 when the flag is repeated, so a
+number described as "two raters agreed" can never be produced by silently
+scoring one of the two sheets. The sheet belongs under `eval/review/`, not
+`eval/results/raw/` - the raw directory is git-ignored, and these grades are the
+only evidence behind `answer_correctness`, so they must be reviewable in the
+repository the way the gold quotes are.
 
 Columns: `qid`, `category`, `question`, `reference_answer`, `answer_text`,
 `citations`, `abstained`, `grade`. Only `category == answerable` rows are for
