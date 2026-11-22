@@ -1417,3 +1417,5 @@ wrote eval/results/summary/chunking_comparison/hit_rates.svg
 
 `ruff check .` 与 `pytest` 是分歧列表和正式目录保护测试改完之后再跑的：`ruff` 通过，`pytest` **195 passed / 2 skipped**。组员本人尚未重跑。
 
+同日稍后只重画了 `hit_rates.svg`。原先 hit@1 的数字从 x=244 画起，盖住了 x=292 的 hit@3 柱。现在每列先留 96px 的柱槽，数字写在柱槽右边。画布从 460 加到 596。数字仍是上面这张表，没有重跑检索，`generated_at` 仍是 `2026-11-22T02:13:25+00:00`。
+

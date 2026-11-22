@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -405,6 +406,27 @@ def test_formal_rejects_dev_and_arbitrary_qa_paths(tmp_path):
     assert _snapshot(summary) == before
 
 
+def _assert_chart_labels_clear_the_bars(chart: str) -> None:
+    width = int(re.search(r'width="(\d+)"', chart).group(1))
+    rects = [
+        (float(x), float(y), float(w))
+        for x, y, w in re.findall(r'<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)"', chart)
+    ]
+    labels = re.findall(r'<text x="([\d.]+)" y="([\d.]+)"[^>]*>([^<]*\([^)]*\))</text>', chart)
+    assert labels
+    for raw_x, raw_y, text in labels:
+        x, y = float(raw_x), float(raw_y)
+        end = x + 7.0 * len(text)
+        assert end <= width
+        for rect_x, rect_y, rect_w in rects:
+            if abs((rect_y + 12) - y) > 8:
+                continue
+            if rect_x >= x:
+                assert rect_x >= end
+            else:
+                assert x >= rect_x + rect_w
+
+
 def test_formal_bundle_keeps_the_hit_rate_objects(tmp_path):
     hit_at_1 = {"hits": 1, "n": 2, "rate": 0.5}
     hit_at_3 = {"hits": 2, "n": 2, "rate": 1.0}
@@ -449,3 +471,4 @@ def test_formal_bundle_keeps_the_hit_rate_objects(tmp_path):
     chart = (directory / "hit_rates.svg").read_text(encoding="utf-8")
     assert "1/2 (0.5)" in chart
     assert "2/2 (1.0)" in chart
+    _assert_chart_labels_clear_the_bars(chart)
