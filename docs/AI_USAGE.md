@@ -189,6 +189,26 @@ fixed 668 chunks、paragraph 775 chunks，全部偏移逐字匹配、出处及�
 T2 的 hit@k 仍是开发集上的检索，不是冻结语料上的正式实验；回答正确率至今为 0。
 贡献比例页须在全员开工后据实填写。
 
+## T5 local Ollama integration (2026-11-22)
+
+Codex acted on the user's report of team agreement to use local Ollama
+`qwen3:4b-instruct`; no separate GitHub decision link was supplied. Added a
+T5-specific configuration and reproduction guide without editing shared config,
+T1-T4 implementation, frozen inputs or human signatures. Agent execution verified
+frozen source hashes and the reviewed-QA gate, created a dedicated 668-chunk index,
+and ran one real cited answer and one real refusal through the existing CLI.
+Conda Python 3.12 crashed importing ONNX; an independent Python 3.11 environment
+worked. Full offline pytest: 195 passed, 2 skipped. Ruff passed. Raw logs and
+model/runtime provenance stay in ignored local files. These are agent executions;
+human personal rerun and independent answer grading remain pending. No paid API
+or fabricated result was used.
+
+The agent subsequently completed the standard local-model batch for 36 frozen
+QA rows (exit 0), recorded model digest and runtime/input provenance, and verified
+T4 loading plus artifact integrity against the reopened index. Raw answers and
+the handoff ZIP remain ignored local files. No human grades or metrics were
+invented or entered; T4 independent answer grading remains pending.
+
 ## T5 additional records
 
 | 2026-11-21 | T5 offline handoff smoke check | Codex | Added `demo.validate_export` to export two synthetic I4 answers, consume them with the existing T4 loader and verify MOCK provenance. Agent ran the command and Ruff successfully; no paid API or formal metrics. | Human review and personal rerun Pending. |

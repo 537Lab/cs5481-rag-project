@@ -1,5 +1,7 @@
 # Offline T5 demo
 
+For the separately configured real local-model workflow, see [OLLAMA.md](OLLAMA.md).
+
 Run from the repository root with Python 3.11 or newer.
 
 ```powershell

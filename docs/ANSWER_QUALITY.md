@@ -70,5 +70,37 @@ Citation-only output now refuses with missing_answer_text. Chinese sentence boun
 
 Validation: 44 generation/offline pipeline tests passed; Ruff passed. Existing Windows pyreadline cleanup warning persists. No paid API calls were made.
 
+## Real local Ollama integration (2026-11-22)
+
+The user reported that the team agreed to local Ollama `qwen3:4b-instruct` in
+the working conversation; no separate GitHub decision link was supplied. This
+supersedes earlier C3-pending notes for this local setup. No paid API is used.
+The independent Python 3.11 environment and commands are in `demo/OLLAMA.md`;
+`demo/ollama.toml` leaves shared configuration unchanged and uses a separate
+T5 index directory. Source hashes for all 16 frozen documents were verified,
+and T4's `validate --require-reviewed` passed for the integrated 36-item QA.
+
+Actual agent execution built 668 fixed chunks (600/80, top_k=3, min_score=0.0).
+A real K01 CLI request returned the control plane and worker nodes with
+`[k8s_v135_components#0000]`; citation ID and verbatim structure checks passed.
+A real KN01 CLI request refused with `model_reported_insufficient_evidence`.
+These are observed behaviors, not independent human grades or correctness rates.
+The exported prefix quote can omit supporting text; semantic grading still
+requires inspecting the full retrieved source.
+
+The original Conda Python 3.12 environment crashed importing ONNX. Independent
+Python 3.11.18 with Chroma 1.5.9 and ONNX Runtime 1.32.0 successfully ingested
+and ran the full offline suite: 195 passed, 2 skipped. Ruff and diff checks
+passed. This does not establish that other Windows environments are repaired.
+The local SDK also needed process-only `NO_PROXY` for localhost. No T3 source,
+QA labels or human signatures were changed. Raw command logs stay local.
+
+The local-model batch then completed with exit 0 for all 36 frozen QA rows.
+The JSONL, sidecar and model/runtime provenance are in the ignored directory
+`eval/results/raw/ollama-20261122/`. T4 loading, qid completeness, run references,
+input hashes and citation structure against the reopened index all passed.
+The handoff is ready for T4; independent semantic grading remains pending.
+No correctness, retrieval or abstention metric is computed by this T5 work.
+
 ## PR #18 review fixes (2026-11-21)
 MOCK batch exports now build their provenance snapshot without loading the REAL configuration or reading its manifest. The MOCK snapshot records the synthetic pipeline's actual `min_score=0.0` instead of inheriting a value from `config.toml`. A regression test supplies a missing REAL manifest and a conflicting retrieval threshold, then verifies that the MOCK export still succeeds and records the fixture pipeline values. Validation after these fixes: 45 generation/offline pipeline tests passed, the suite excluding the known Windows Chroma store crash passed with 3 skips, and Ruff plus `git diff --check` passed. No paid API calls were made.
