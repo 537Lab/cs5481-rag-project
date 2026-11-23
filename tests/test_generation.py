@@ -20,6 +20,127 @@ from ragkit.generation import (
 )
 from tests.fakes import ScriptedLLM
 
+
+@pytest.mark.parametrize(('raw', 'reason'), [
+    ('NO_ANSWER', 'model_reported_insufficient_evidence'),
+    ('Alpha uses 8080. Beta is read-only [doc_a#0001].', 'uncovered_claim'),
+    ('kubectl get pods --all-namespaces', 'missing_citations'),
+    ('Alpha uses 8080 [doc_a#0000]', None),
+])
+def test_answer_diagnostics_preserve_gate_distinctions(raw, reason):
+    from dataclasses import asdict
+
+    from demo.inspect_answers import inspect_record
+
+    hits = _hits()
+    generator, _ = _generator(raw)
+    row = asdict(generator.generate('q', hits))
+    row.update(qid='MOCK-inspect', retrieved_chunk_ids=[hit.chunk.chunk_id for hit in hits])
+    chunks = {hit.chunk.chunk_id: hit.chunk for hit in hits}
+    result = inspect_record(row, chunks.get)
+    assert result['generation_gate'] == reason
+    assert result['citation_structure_valid'] is True
+    assert result['semantic_support'] == 'not_graded'
+    if reason == 'uncovered_claim':
+        assert result['uncovered_units'] == ['Alpha uses 8080.']
+    else:
+        assert result['uncovered_units'] == []
+
+
+def test_answer_diagnostics_do_not_guess_when_index_is_incomplete():
+    from dataclasses import asdict
+
+    from demo.inspect_answers import inspect_record
+
+    generator, _ = _generator('NO_ANSWER')
+    row = asdict(generator.generate('q', _hits()))
+    row.update(qid='MOCK-missing', retrieved_chunk_ids=['doc_a#0000'])
+    result = inspect_record(row, lambda cid: None)
+    assert result['missing_chunk_ids'] == ['doc_a#0000']
+    assert result['diagnostic_status'] == 'incomplete_index'
+    assert result['generation_gate'] is None
+    assert result['citation_structure_valid'] is None
+
+
+def test_local_demo_pins_local_service_and_restores_environment(tmp_path, monkeypatch, capsys):
+    import os
+    from types import SimpleNamespace
+
+    from demo import local_demo
+
+    monkeypatch.setenv('OPENAI_BASE_URL', 'https://example.test/v1')
+    monkeypatch.setenv('OPENAI_API_KEY', 'test-dummy-key')
+    monkeypatch.setattr(local_demo, 'load_settings', lambda config: SimpleNamespace(
+        embedding_provider='local', index_dir=tmp_path))
+    seen = []
+
+    class Pipeline:
+        store = SimpleNamespace(count=lambda: 2)
+
+        def ask(self, question):
+            seen.append(question)
+            raw = 'NO_ANSWER' if 'cheapest' in question else 'Alpha uses 8080 [doc_a#0000]'
+            return _generator(raw)[0].generate(question, _hits()), _hits()
+
+    def build(settings):
+        assert os.environ['OPENAI_BASE_URL'] == 'http://localhost:11434/v1'
+        assert os.environ['OPENAI_API_KEY'] == 'ollama'
+        assert os.environ['LLM_MODEL'] == 'qwen3:4b-instruct'
+        return Pipeline()
+
+    monkeypatch.setattr(local_demo, 'build_llm_pipeline', build)
+    assert local_demo.run_demo('unused.toml') == 0
+    assert seen == list(local_demo.QUESTIONS)
+    assert os.environ['OPENAI_BASE_URL'] == 'https://example.test/v1'
+    assert os.environ['OPENAI_API_KEY'] == 'test-dummy-key'
+    assert 'COMPLETE RETRIEVED CHUNK:' in capsys.readouterr().out
+
+
+def test_local_demo_rejects_api_embeddings_before_building_client(monkeypatch):
+    import os
+    from types import SimpleNamespace
+
+    from demo import local_demo
+
+    monkeypatch.setenv('OPENAI_BASE_URL', 'https://example.test/v1')
+    monkeypatch.setattr(local_demo, 'load_settings', lambda config: SimpleNamespace(
+        embedding_provider='api'))
+    monkeypatch.setattr(local_demo, 'build_llm_pipeline', lambda settings: pytest.fail('API call'))
+    with pytest.raises(ValueError, match='local embeddings'):
+        local_demo.run_demo('unused.toml')
+    assert os.environ['OPENAI_BASE_URL'] == 'https://example.test/v1'
+@pytest.mark.parametrize('corruption', ['refusal', 'config_ref', 'qa_hash'])
+def test_handoff_rejects_corrupted_export(tmp_path, corruption):
+    import argparse
+    import json
+
+    from demo.validate_export import validate_export
+    from ragkit.cli import cmd_batch
+
+    output = tmp_path / 'MOCK-handoff.jsonl'
+    cmd_batch(argparse.Namespace(
+        questions='demo/questions.csv', output=str(output),
+        run_id='MOCK-handoff', config=None, mock=True,
+    ))
+    validate_export(output)
+    if corruption == 'qa_hash':
+        snapshot_path = output.with_suffix('.config.json')
+        snapshot = json.loads(snapshot_path.read_text(encoding='utf-8'))
+        snapshot['qa_sha256'] = '0' * 64
+        snapshot_path.write_text(json.dumps(snapshot), encoding='utf-8')
+        error = 'input hash mismatch'
+    else:
+        records = [json.loads(line) for line in output.read_text(encoding='utf-8').splitlines()]
+        if corruption == 'refusal':
+            records[1]['answer']['abstained'] = False
+            error = 'Scripted refusal'
+        else:
+            records[0]['config_ref'] = 'missing.config.json'
+            error = 'Broken configuration reference'
+        output.write_text('\n'.join(json.dumps(row) for row in records) + '\n', encoding='utf-8')
+    with pytest.raises(RuntimeError, match=error):
+        validate_export(output)
+
 CHUNK_TEXTS = {
     "doc_a#0000": "The alpha service listens on port 8080.",
     "doc_a#0001": "The beta service is read-only.",
@@ -77,6 +198,47 @@ def test_fabricated_citation_is_rejected():
     assert answer.citations == ()
     assert answer.answer_text.startswith("I cannot answer")
     assert verify_citations(answer, _hits())
+
+
+@pytest.mark.parametrize('padding', ['Operational background. ' * 20, '背景说明。' * 150])
+def test_citation_keeps_late_evidence_through_i4(tmp_path, monkeypatch, padding):
+    import argparse
+    import json
+    from dataclasses import asdict, replace
+
+    from eval.metrics import load_outputs
+    from ragkit import cli
+
+    # Synthetic source only: the supporting sentence follows the old cutoff.
+    text = '\n  ' + padding + '\nAlpha listens on port 8080.\n  '
+    assert text.index('8080') > 200
+    chunk = replace(_hits()[0].chunk, text=text, char_end=len(text))
+    hits = [RetrievedChunk(chunk=chunk, score=0.9, rank=1)]
+    generator, llm = _generator('Alpha listens on port 8080 [doc_a#0000]')
+    answer = generator.generate('Which port does alpha use?', hits)
+    assert not answer.abstained
+    assert answer.citations[0].quote == text
+    assert verify_citation_structure(answer, hits)
+    assert len(llm.calls) == 1
+    assert asdict(answer.citations[0]) == {
+        'chunk_id': chunk.chunk_id, 'doc_id': chunk.doc_id, 'quote': text,
+        'title': chunk.title, 'source_uri': chunk.source_uri,
+    }
+
+    class Pipeline:
+        def ask(self, question):
+            return generator.generate(question, hits), hits
+
+    monkeypatch.setattr(cli, 'build_llm_pipeline', lambda settings: Pipeline())
+    questions = tmp_path / 'questions.csv'
+    questions.write_text('qid,question\nMOCK-tail,Which port?\n', encoding='utf-8')
+    output = tmp_path / 'MOCK-tail.jsonl'
+    args = argparse.Namespace(questions=str(questions), output=str(output),
+                              run_id='MOCK-tail-evidence', config=None)
+    assert cli.cmd_batch(args) == 0
+    nested = json.loads(output.read_text(encoding='utf-8'))
+    assert nested['answer']['citations'][0]['quote'] == text
+    assert load_outputs(output)['MOCK-tail']['citations'][0]['quote'] == text
 
 
 def test_answer_without_any_citation_is_rejected():

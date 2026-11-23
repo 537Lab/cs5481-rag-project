@@ -189,7 +189,64 @@ fixed 668 chunks、paragraph 775 chunks，全部偏移逐字匹配、出处及�
 T2 的 hit@k 仍是开发集上的检索，不是冻结语料上的正式实验；回答正确率至今为 0。
 贡献比例页须在全员开工后据实填写。
 
+## T5 answer diagnosis and real-demo entry point (2026-11-22)
+
+Codex added `demo.inspect_answers` (per-answer technical diagnostics without
+model calls, gold or metric aggregation), `demo.local_demo` (two pinned-local
+Ollama examples), synthetic regressions and an operational/technical handoff.
+Agent execution reproduced the existing K06/K24 gate failures, resolved all
+source IDs in the 36-answer artifact, verified its original hash unchanged and
+ran the real local demonstration. Full offline pytest: 335 passed, 2 skipped;
+Ruff and diff checks passed. No prompt/gate tuning, new formal batch, human grades,
+signatures or metric implementation was introduced. Human personal rerun,
+non-author code review and T4 independent semantic grading remain pending.
+## T5 local Ollama integration (2026-11-22)
+
+Codex acted on the user's report of team agreement to use local Ollama
+`qwen3:4b-instruct`; no separate GitHub decision link was supplied. Added a
+T5-specific configuration and reproduction guide without editing shared config,
+T1-T4 implementation, frozen inputs or human signatures. Agent execution verified
+frozen source hashes and the reviewed-QA gate, created a dedicated 668-chunk index,
+and ran one real cited answer and one real refusal through the existing CLI.
+Conda Python 3.12 crashed importing ONNX; an independent Python 3.11 environment
+worked. Full offline pytest: 195 passed, 2 skipped. Ruff passed. Raw logs and
+model/runtime provenance stay in ignored local files. These are agent executions;
+human personal rerun and independent answer grading remain pending. No paid API
+or fabricated result was used.
+
+The agent subsequently completed the standard local-model batch for 36 frozen
+QA rows (exit 0), recorded model digest and runtime/input provenance, and verified
+T4 loading plus artifact integrity against the reopened index. Raw answers and
+the handoff ZIP remain ignored local files. No human grades or metrics were
+invented or entered; T4 independent answer grading remains pending.
+## T5 full citation export (2026-11-22)
+
+Codex replaced the 200-character citation prefix with the complete cited retrieved
+chunk and added synthetic English/Chinese late-evidence regressions through I4
+and T4 loading. No contract, prompt, refusal gate, gold data or T1-T4 implementation
+was changed. Agent execution: full offline pytest 330 passed / 2 skipped; Ruff
+and diff checks passed. A separate two-question real local Ollama smoke run
+verified a complete 600-character citation and continued refusal behavior. Its
+raw output remains ignored. The original 36-answer grading artifact was checked
+unchanged by SHA-256; no grades or signatures were written. Human personal rerun,
+code review and semantic grading remain pending.
+
+## T5 unified delivery (2026-11-22)
+
+At the user's request to batch the work, Codex integrated exact T5 #22/#24/#25
+commits into the existing #26 branch via ordinary merges; original branches and
+the approved #25 commit were preserved. Conflicts retained both sets of added
+tests and T5 execution records. Agent execution: complete offline suite 340
+passed / 2 skipped, Ruff and enhanced MOCK handoff passed. A fresh local-model
+36-question engineering regression completed with full-chunk citations, matching
+input hashes and T4 loading/structure checks. The original grading baseline was
+verified unchanged by SHA-256. Raw regression/provenance stays ignored. No blind
+benchmark, human grades, signatures, agreement or correctness metric is claimed.
+Personal human rerun and non-author review of the unified scope remain pending.
+
 ## T5 additional records
+
+| 2026-11-22 | T5 I4 handoff integrity | Codex | Checked expected synthetic qids, answer/refusal states, citation IDs, config references and input hashes; added tampered-artifact regressions and refreshed T5 integration status. Agent executed the offline handoff and 130 generation/offline/T4 tests successfully; git diff --check passed. | Human review and personal rerun Pending. No real API calls or formal metrics. |
 
 | 2026-11-21 | T5 offline handoff smoke check | Codex | Added `demo.validate_export` to export two synthetic I4 answers, consume them with the existing T4 loader and verify MOCK provenance. Agent ran the command and Ruff successfully; no paid API or formal metrics. | Human review and personal rerun Pending. |
 
