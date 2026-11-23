@@ -1667,8 +1667,32 @@ $ python -m pytest -o addopts="" -q
 
 （与上轮基线相同，本轮未新增测试。）
 
-### 15.6 仍未做
+### 15.6 xlsx/csv 一致性验证
 
-- `Reviewer_B_confirmed_AI_assisted.xlsx` 与 csv 的逐条一致性；
+验证 `Reviewer_B_confirmed_AI_assisted.xlsx`（16730 B，3 sheets: "AI pre-review", "Evidence", "Method"）与 `grades_reviewer_B_confirmed_AI_assisted.csv`（9115 B）的逐条一致性。
+
+**结果**：
+- **Grades 完全一致**：26/26 条 grade 匹配（11 correct / 15 incorrect）
+- **Tally 一致**：xlsx 和 csv 都是 11/15
+- **其他字段差异**：
+  - `judge_note`：xlsx 全部写 "User confirmed the AI-assisted suggestion in chat on 2026-11-22."；csv 有逐条详细理由
+  - `reviewer_id`：xlsx 为空；csv 填 "ldk13856478627-cell (user-provided)"
+  - `reviewed_at`：xlsx 为空；csv 填 "2026-11-22"
+  - `ai_assisted`：xlsx 为空；csv 填 "yes"
+  - `confirmation_note`：xlsx 只写 grade（"correct"/"incorrect"）；csv 有完整声明（"User stated in chat... AI-assisted, not independent blind review"）
+
+**结论**：grades 实质一致，csv 是增强版（含详细元数据和逐条理由），xlsx 是简化记录。可接受。
+
+### 15.7 报告正文
+
+报告正文已写入 `docs/REPORT.md`（227 行），包含：
+- Introduction：RAG 系统概述和评估目标
+- Methodology：语料、QA 集、答案生成、评分协议、裁决过程
+- Experiments：answer_correctness = 11/26 = 0.4231，kappa = 0.0244，xlsx/csv 一致性
+- Discussions：结果解读、局限性、材料缺陷与工具改进、建议
+- Individual Contributions：待组员填写并签名
+
+### 15.8 仍未做
+
 - 组员本人重跑本轮任何命令；本 PR 的 `ci / check`；
-- 报告正文里如何呈现 0.4231 与 0.0244 的一致性数字（T4 待写）。
+- Individual Contributions 页组员签名。

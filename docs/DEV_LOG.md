@@ -194,3 +194,21 @@ A/B 一致性仍报 `kappa = 0.0244`（分母 12），根因是材料缺陷（�
 **人工复核状态：** `answer_correctness` 已入库，可写进报告。待做：报告正文如何呈现 0.4231 与 0.0244 的一致性
 数字（T4 待写）；`Reviewer_B_confirmed_AI_assisted.xlsx` 与 csv 的逐条一致性；组员本人重跑本轮任何命令；
 本 PR 的 `ci / check`。
+
+### 2026-11-23 xlsx/csv 一致性验证与报告正文完成（编码 agent 执行）
+
+验证 `Reviewer_B_confirmed_AI_assisted.xlsx` 与 `grades_reviewer_B_confirmed_AI_assisted.csv` 的逐条一致性。
+
+**结果**：
+- Grades 完全一致：26/26 条 grade 匹配（11 correct / 15 incorrect）
+- Tally 一致：xlsx 和 csv 都是 11/15
+- 其他字段差异：xlsx 是简化记录（无 reviewer_id/reviewed_at/ai_assisted，judge_note 全部写 "User confirmed..."）；
+  csv 是增强版（含逐条理由、元数据、AI-assisted 声明）
+
+**结论**：grades 实质一致，csv 更透明。可接受。
+
+报告正文已写入 `docs/REPORT.md`（227 行），包含 Introduction / Methodology / Experiments / Discussions / 
+Individual Contributions 五部分。Individual Contributions 页待组员填写并签名。
+
+**人工复核状态：** `answer_correctness` 已入库，报告正文已完成。待做：组员本人重跑本轮任何命令；
+本 PR 的 `ci / check`；Individual Contributions 页组员签名。

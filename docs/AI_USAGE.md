@@ -332,3 +332,48 @@ agent 刻意没有做的几件事：
 **人工复核状态：** `answer_correctness = 11/26 = 0.4231` 已入库，可写进报告。待做：报告正文如何呈现 0.4231 与
 0.0244 的一致性数字（T4 待写）；`Reviewer_B_confirmed_AI_assisted.xlsx` 与 csv 的逐条一致性；组员本人重跑本轮任何命令；
 本 PR 的 `ci / check`。
+
+### 2026-11-23 xlsx/csv 一致性验证与报告正文完成（Qoder 编码 agent）
+
+本节由 agent 撰写。验证 `Reviewer_B_confirmed_AI_assisted.xlsx` 与 `grades_reviewer_B_confirmed_AI_assisted.csv` 
+的逐条一致性，并完成报告正文。
+
+**xlsx/csv 验证**：
+
+agent 做的（可机械复核部分）：
+1. 安装 openpyxl 到 venv（之前未安装）
+2. 解析 xlsx 结构：3 sheets（"AI pre-review", "Evidence", "Method"），数据在 "AI pre-review" sheet 第 7 行起
+3. 逐条比对 grades：26/26 完全一致（11 correct / 15 incorrect）
+4. 比对其他字段：xlsx 是简化记录（无 reviewer_id/reviewed_at/ai_assisted，judge_note 全部写 "User confirmed..."）；
+   csv 是增强版（含逐条理由、元数据、AI-assisted 声明）
+5. 结论：grades 实质一致，csv 更透明。可接受。
+
+agent 刻意没有做的：
+1. **没有修改任何文件**。xlsx 和 csv 都保持原样，agent 只读取和比对。
+2. **没有代填缺失字段**。xlsx 缺少的 reviewer_id/reviewed_at/ai_assisted 未由 agent 补填。
+3. **没有判断哪个版本更权威**。两个文件都保留，报告里说明差异。
+
+**报告正文**：
+
+报告正文已写入 `docs/REPORT.md`（227 行），包含：
+- Introduction：RAG 系统概述和评估目标
+- Methodology：语料、QA 集、答案生成、评分协议、裁决过程
+- Experiments：answer_correctness = 11/26 = 0.4231，kappa = 0.0244，xlsx/csv 一致性
+- Discussions：结果解读、局限性、材料缺陷与工具改进、建议
+- Individual Contributions：待组员填写并签名
+
+agent 做的：
+1. 根据仓库内所有验证结果和日志撰写报告正文
+2. 如实呈现数字（0.4231、0.0244）和局限性（单裁决人、材料缺陷、AI-assisted）
+3. 未代填 Individual Contributions 页的组员姓名和签名
+
+agent 刻意没有做的：
+1. **没有修改任何实验数字**。报告里的数字全部来自已验证的日志和汇总文件。
+2. **没有代填组员贡献**。Individual Contributions 页留空待组员本人填写。
+3. **没有隐瞒 AI 参与**。报告明确说明 agent 撰写了正文，但判断和签名由组员完成。
+
+`--executor` 显式写明，未用缺省值。本机 `ruff check .` 通过，`python -m pytest -o addopts="" -q` 
+**335 passed / 2 skipped**。
+
+**人工复核状态：** `answer_correctness = 11/26 = 0.4231` 已入库，报告正文已完成。待做：组员本人重跑本轮任何命令；
+本 PR 的 `ci / check`；Individual Contributions 页组员签名。
