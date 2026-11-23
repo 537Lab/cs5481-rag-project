@@ -94,8 +94,10 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import io
 import json
 import re
+import shlex
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
@@ -344,9 +346,12 @@ def _command_line() -> str:
     replaces the recorded arguments with the ones it was actually given, so a
     caller that imports ``main()`` (T2's experiment script) still gets truthful
     provenance instead of the driver's own command line. Path arguments are
-    shortened the same way as everywhere else in the envelope.
+    shortened the same way as everywhere else in the envelope. Values are quoted
+    because ``run.md`` tells the reader to reproduce with this exact line: a
+    free-text ``--executor`` with spaces would otherwise read back as many
+    separate arguments.
     """
-    return " ".join(
+    return shlex.join(
         ["python", "-m", "eval.metrics", *(_relative(part) for part in _COMMAND_ARGS)]
     )
 
@@ -778,6 +783,26 @@ def _retrieved_from_record(
 # Human grading sheet
 # ---------------------------------------------------------------------------
 
+
+def _read_text_utf8(path: Path, *, what: str) -> str:
+    """Read a submitted text file, failing with an instruction instead of a traceback.
+
+    Grading sheets come out of spreadsheet software, and a CSV saved in the local
+    Windows codepage is not UTF-8. A bare `UnicodeDecodeError` mid-scorer sends a
+    rater away with a stack trace and no next step, so the failure names the file,
+    the byte, and the re-save. The grades are deliberately not salvaged by guessing
+    an encoding: silently re-decoding the evidence behind a headline number is how a
+    wrong number gets a clean pedigree.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise QASetError(
+            f"{path} is not valid UTF-8 ({exc.reason} at byte {exc.start}); "
+            f"re-save the {what} as UTF-8 (in Excel: Save As > 'CSV UTF-8') and rerun"
+        ) from exc
+
+
 GRADE_COLUMNS = [
     "qid",
     "category",
@@ -785,13 +810,63 @@ GRADE_COLUMNS = [
     "reference_answer",
     "answer_text",
     "citations",
+    "cited_chunk_text",
     "abstained",
     "grade",
+    # Declaration, not decoration: a sheet with no line for who graded it and
+    # whether a machine produced the grades is the sheet that lets an AI-assisted
+    # list reach the report looking like a human judgement.
+    "reviewer_id",
+    "reviewed_at",
+    "ai_assisted",
 ]
 ALLOWED_GRADES = ("correct", "incorrect", "unsure")
 
+# A blank evidence cell is not a neutral placeholder: it reads as "the cited chunk
+# contains nothing", which is the wrong conclusion to reach silently.
+CHUNK_TEXT_UNRESOLVED = (
+    "<CITED CHUNK TEXT NOT RESOLVED - this row cannot support a citation check; "
+    "ingest the index (see run.md) and regenerate the sheet before grading>"
+)
+CHUNK_TEXT_MISSING = "<CITED CHUNK {cid} NOT FOUND IN THE INDEX - cannot support a citation check>"
 
-def write_grading_sheet(path: str | Path, items: Sequence[QAItem], outputs: dict) -> Path:
+
+def _cited_chunk_text(
+    citation_ids: Sequence[str], chunk_of: Callable[[str], Chunk | None] | None
+) -> str:
+    """Put the *full* source behind every cited chunk id onto the sheet.
+
+    A rater has to judge whether what was cited supports the answer. The answer
+    artifact itself carries only a 200-character citation prefix, and on 2026-11-22
+    two sheets graded that prefix instead of the chunk it points into: eight items
+    whose gold sentence sits further down in the cited chunk were marked `incorrect`
+    for a reason that is true of the excerpt and false of the evidence. What those
+    sheets measured was the window they were handed, not the system under test, so
+    the sheet now carries the window closed.
+
+    Newlines are folded to a visible marker so one graded row stays one row.
+    """
+    if not citation_ids:
+        return ""
+    if chunk_of is None:
+        return CHUNK_TEXT_UNRESOLVED
+    parts: list[str] = []
+    for chunk_id in citation_ids:
+        chunk = chunk_of(chunk_id)
+        if chunk is None:
+            parts.append(CHUNK_TEXT_MISSING.format(cid=chunk_id))
+            continue
+        parts.append(f"[{chunk_id}] " + chunk.text.replace("\n", " \u23ce "))
+    return " ||| ".join(parts)
+
+
+def write_grading_sheet(
+    path: str | Path,
+    items: Sequence[QAItem],
+    outputs: dict,
+    *,
+    chunk_of: Callable[[str], Chunk | None] | None = None,
+) -> Path:
     """Emit the sheet the two judges fill in by hand (see judge_protocol.md).
 
     Every row is listed so nothing is silently skipped, but only ``answerable``
@@ -799,6 +874,11 @@ def write_grading_sheet(path: str | Path, items: Sequence[QAItem], outputs: dict
     unanswerable qid, since a successful refusal belongs to the abstention
     rates. The ``category`` and ``abstained`` columns make that visible on the
     sheet itself instead of relying on the instructions being read.
+
+    ``cited_chunk_text`` is why ``chunk_of`` is needed: without it a rater can
+    only see the citation id and the answer, and the only place the cited text
+    exists is the artifact's truncated prefix. Pass the store lookup
+    (``chunk_of=store.get_chunk``) so the sheet states its own evidence.
     """
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -807,6 +887,11 @@ def write_grading_sheet(path: str | Path, items: Sequence[QAItem], outputs: dict
         writer.writerow(GRADE_COLUMNS)
         for item in items:
             record = _flatten_answer(outputs.get(item.qid, {}))
+            citation_ids = [
+                str(entry.get("chunk_id", ""))
+                for entry in (record.get("citations") or [])
+                if isinstance(entry, dict)
+            ]
             writer.writerow(
                 [
                     item.qid,
@@ -814,12 +899,12 @@ def write_grading_sheet(path: str | Path, items: Sequence[QAItem], outputs: dict
                     item.question,
                     item.reference_answer,
                     str(record.get("answer_text", "")),
-                    ",".join(
-                        str(entry.get("chunk_id", ""))
-                        for entry in (record.get("citations") or [])
-                        if isinstance(entry, dict)
-                    ),
+                    ",".join(citation_ids),
+                    _cited_chunk_text(citation_ids, chunk_of),
                     bool(record.get("abstained")),
+                    "",
+                    "",
+                    "",
                     "",
                 ]
             )
@@ -830,7 +915,8 @@ def load_grades(path: str | Path) -> dict[str, str]:
     file_path = Path(path)
     if not file_path.is_file():
         raise QASetError(f"grading file not found: {file_path}")
-    with file_path.open(encoding="utf-8", newline="") as handle:
+    text = _read_text_utf8(file_path, what="grades sheet")
+    with io.StringIO(text, newline="") as handle:
         reader = csv.DictReader(handle)
         if not reader.fieldnames or "grade" not in reader.fieldnames:
             raise QASetError(f"{file_path} needs a 'grade' column, got {reader.fieldnames}")
@@ -849,6 +935,60 @@ def load_grades(path: str | Path) -> dict[str, str]:
     return grades
 
 
+# Columns a rater's sheet may use to say how the grades were produced. They carry
+# no scoring meaning, which is exactly why they must not be lost on the way in.
+GRADE_DISCLOSURE_COLUMNS = (
+    "reviewer_id",
+    "reviewed_at",
+    "ai_assisted",
+    "confirmation_note",
+    "judge_note",
+    "reason",
+    "suggested_reason",
+)
+AI_ASSISTED_TRUE = ("yes", "y", "true", "1")
+
+
+def grades_provenance(path: str | Path) -> dict[str, object]:
+    """Copy what the grading sheet says about itself into the summary.
+
+    `load_grades()` reads `qid` and `grade` and nothing else. That is correct for
+    scoring and misleading for provenance: a sheet whose own columns state
+    `ai_assisted=yes` and that an agent formatted after a human accepted a list of
+    AI suggestions would otherwise land in `run.md` as an ordinary human-graded
+    number. Whether a grade was written by a person reading the item or confirmed in
+    bulk from a machine list is the difference the protocol's rater rule turns on, so
+    the sheet's declaration travels with the metric instead of being dropped.
+
+    Long free-text columns are summarised as counts rather than copied: the audit
+    trail belongs in the sheet under `eval/review/`, and a summary should not become
+    a second place for the same prose.
+    """
+    file_path = Path(path)
+    text = _read_text_utf8(file_path, what="grades sheet")
+    with io.StringIO(text, newline="") as handle:
+        reader = csv.DictReader(handle)
+        columns = list(reader.fieldnames or ())
+        rows = list(reader)
+    found: dict[str, object] = {"columns": [c for c in columns if c in GRADE_DISCLOSURE_COLUMNS]}
+    for column in GRADE_DISCLOSURE_COLUMNS:
+        if column not in columns:
+            continue
+        values = [str(row.get(column) or "").strip() for row in rows]
+        filled = [value for value in values if value]
+        distinct = sorted(set(filled))
+        if max((len(value) for value in distinct), default=0) <= 60:
+            found[column] = distinct
+        else:
+            found[f"{column}_rows_filled"] = len(filled)
+            found[f"{column}_distinct"] = len(distinct)
+            found[f"{column}_first"] = distinct[0][:160]
+    flags = [str(value).strip().lower() for value in found.get("ai_assisted", [])] if isinstance(
+        found.get("ai_assisted"), list) else []
+    found["declared_ai_assisted"] = any(value in AI_ASSISTED_TRUE for value in flags)
+    return found
+
+
 def _parse_jsonl(text: str, path: Path) -> list[dict[str, object]]:
     records: list[dict[str, object]] = []
     for line_number, line in enumerate(text.splitlines(), start=1):
@@ -863,7 +1003,7 @@ def _parse_jsonl(text: str, path: Path) -> list[dict[str, object]]:
 
 def _read_answer_records(path: Path) -> list[dict[str, object]]:
     """Read interface I4: JSON Lines first, plain JSON envelopes still accepted."""
-    text = path.read_text(encoding="utf-8")
+    text = _read_text_utf8(path, what="answer artifact")
     if path.suffix.lower() in (".jsonl", ".ndjson"):
         return _parse_jsonl(text, path)
     try:
@@ -1172,12 +1312,19 @@ def write_summary(
     payload = result.to_payload()
     config = dict(payload["config"]) | {"label": result.label, "mode": result.mode}
     correctness = result.metrics.get("answer_correctness")
+    grades_note = config.get("grades_provenance") or {}
+    graded_by = (
+        "grades confirmed in bulk from a sheet that declares itself AI-assisted, which "
+        "judge_protocol.md section 1 does not accept as blind human grading"
+        if grades_note.get("declared_ai_assisted")
+        else "human grades supplied by --grades"
+    )
     judge = (
         "not applicable: retrieval-only run"
         if result.mode == "retrieval"
         else PENDING_CORRECTNESS
         if isinstance(correctness, str)
-        else f"human grades on {result.metrics.get('n_graded')} answerable item(s); "
+        else f"{result.metrics.get('n_graded')} answerable item(s) graded; source: {graded_by}; "
         "citation structure is reported separately and is not correctness"
     )
     metrics = {
@@ -1205,6 +1352,24 @@ def write_summary(
         "- exit code: 0 (this file is written by the run that produced it)",
         f"- corpus: {config.get('corpus_ref')} (frozen: {config.get('corpus_frozen')})",
         f"- QA set: {config.get('qa_set_ref')} ({config.get('qa_set_status')})",
+    ]
+    if config.get("grades_ref"):
+        lines.append(f"- grades sheet: {config['grades_ref']}")
+        note = config.get("grades_provenance") or {}
+        if not note.get("columns"):
+            lines.append(
+                "- grades sheet declares no reviewer_id/reviewed_at/ai_assisted column, so "
+                "who graded these and whether a machine produced the grades is unrecorded"
+            )
+        for key in ("reviewer_id", "reviewed_at", "ai_assisted"):
+            if key in note:
+                value = note[key]
+                rendered = ", ".join(map(str, value)) if isinstance(value, list) else value
+                lines.append(f"- grades sheet {key}: {rendered or '(empty)'}")
+        for key in ("confirmation_note_first", "judge_note_first"):
+            if note.get(key):
+                lines.append(f"- grades sheet {key}: {note[key]}")
+    lines += [
         "",
         "Reproduce from the repository root with the command above; the index must",
         "already exist (`python -m ragkit.cli ingest`).",
@@ -1351,7 +1516,11 @@ def cmd_score(args: argparse.Namespace) -> int:
             f"--run-id {args.run_id!r} does not match the run_id "
             f"{provenance['run_id']!r} recorded in {_relative(outputs_path)}"
         )
-    grades = load_grades(args.grades) if args.grades else None
+    # ``append`` on --grades exists only to make a repeated flag visible; the
+    # check itself runs in ``main()`` so it fires before any index or artifact
+    # is touched. Correctness comes from ONE reconciled sheet.
+    grade_files = list(args.grades or [])
+    grades = load_grades(grade_files[0]) if grade_files else None
     if args.label == "REAL" and looks_scripted(provenance["models"]):
         print(
             "WARNING: --label REAL, but every record in this artifact names a scripted "
@@ -1381,14 +1550,19 @@ def cmd_score(args: argparse.Namespace) -> int:
         settings, items, qa_path=args.qa, min_coverage=args.min_coverage
     ) | {
         "outputs_file": _relative(outputs_path),
-        "grades_file": _relative(args.grades) if args.grades else None,
+        "grades_file": _relative(grade_files[0]) if grade_files else None,
+        "grades_ref": (
+            f"{_relative(grade_files[0])}@{_sha256(grade_files[0])}" if grade_files else None
+        ),
+        "grades_provenance": grades_provenance(grade_files[0]) if grade_files else None,
         **provenance,
     }
     print(f"[{result.label}] scoring answer run: {_relative(outputs_path)} "
           f"(run_id={provenance['run_id']}, records={provenance['n_records']})")
     print_summary(result, print_items=args.print_items)
     if args.grading_sheet:
-        print(f"wrote grading sheet {write_grading_sheet(args.grading_sheet, items, outputs)}")
+        sheet = write_grading_sheet(args.grading_sheet, items, outputs, chunk_of=store.get_chunk)
+        print(f"wrote grading sheet {sheet}")
     if args.out:
         print(f"wrote {result.write(args.out)}")
     _write_summary_if_asked(args, result)
@@ -1620,7 +1794,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="look for eval/answers/<run-id>.jsonl instead of passing --outputs",
     )
     score.add_argument(
-        "--grades", type=Path, default=None, help="human grading csv (see judge_protocol.md)"
+        "--grades",
+        action="append",
+        type=Path,
+        metavar="CSV",
+        help="human grading csv (see judge_protocol.md); exactly one, so a "
+        "repeated flag fails instead of silently keeping the last sheet",
     )
     score.add_argument(
         "--grading-sheet", type=Path, default=None, help="write an empty grading sheet here"
@@ -1633,12 +1812,33 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _reject_duplicate_flags(args: argparse.Namespace) -> None:
+    """Refuse a file flag that only makes sense once, instead of keeping the last.
+
+    With the original single-value action, ``--grades a.csv --grades b.csv``
+    silently scored only ``b.csv`` - the likeliest way for one person's sheet to
+    reach the report as "two independent raters agreed". The two sheets must be
+    reconciled first: disagreements go to a third reader, whose call becomes the
+    single recorded grade (``eval/judge_protocol.md`` §1).
+    """
+    grades = getattr(args, "grades", None)
+    if isinstance(grades, list) and len(grades) > 1:
+        raise QASetError(
+            "--grades takes exactly one csv, got "
+            f"{len(grades)} ({', '.join(_relative(p) for p in grades)}). Reconcile "
+            "the two sheets into one file per eval/judge_protocol.md before scoring; "
+            "the reason they must be reconciled by a human is exactly why they are "
+            "not accepted as two inputs here."
+        )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     global _COMMAND_ARGS
     if argv is not None:
         _COMMAND_ARGS = [str(part) for part in argv]
     args = build_parser().parse_args(argv)
     try:
+        _reject_duplicate_flags(args)
         return int(args.func(args))
     except QASetError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

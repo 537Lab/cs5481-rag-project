@@ -1,5 +1,9 @@
 # Offline T5 demo
 
+For the real local demonstration, per-answer diagnosis and final delivery
+checklist, see [T5_HANDOFF.md](T5_HANDOFF.md).
+For the separately configured real local-model workflow, see [OLLAMA.md](OLLAMA.md).
+
 Run from the repository root with Python 3.11 or newer.
 
 ```powershell
@@ -8,11 +12,12 @@ python -m demo.validate_export
 python -m ragkit.cli batch --mock --questions demo/questions.csv --run-id MOCK-example --output eval/results/raw/MOCK-example.jsonl
 ```
 
-Synthetic fixtures and scripted responses require no API key. The demo displays a normal answer with its source excerpt and two refusal cases. Choose a new output path when repeating a batch run. Citation structure does not establish semantic support. Real LLM integration remains pending team API approval.
+Synthetic fixtures and scripted responses require no API key. The demo displays a normal answer with its source excerpt and two refusal cases. Choose a new output path when repeating a batch run. Citation structure does not establish semantic support. The commands above remain MOCK; the separately configured real local workflow and its execution record are described in T5_HANDOFF.md.
 
 `demo.validate_export` performs an offline T5-to-T4 handoff smoke check: it exports
 the two synthetic questions, reads them with T4's existing `load_outputs`, checks
-the MOCK provenance settings, and removes its temporary artifacts on exit. It
+the expected question IDs, scripted answer/refusal states, retrieved citation IDs,
+configuration references and input hashes, and removes its temporary artifacts on exit. It
 does not calculate metrics or use the formal QA dataset.
 
 ## Classroom walkthrough (MOCK, about three minutes)

@@ -1,0 +1,59 @@
+{
+  "experiment_id": "i4_answer_metrics",
+  "generated_at": "2026-11-23T06:39:36+00:00",
+  "command": "python -m eval.metrics score --outputs .tmp/t5handoff/eval/results/raw/ollama-20261122/LOCAL-ollama-fixed-20261122.jsonl --formal --grades eval/review/grades_LOCAL-ollama-fixed-20261122.csv --executor 'adjudicated by usagi (T3); 14 refusals rule-scored by A+B agreement; AI-assisted evidence prep only' --summary-dir eval/results/summary/i4_answer_metrics",
+  "config_ref": "config.json",
+  "corpus_ref": "cs5481-k8s-v135-16docs-36fd3eedf33f@bddfe3601885",
+  "qa_set_ref": "eval/qa_set.csv@b01b97fbdf2a",
+  "label": "REAL",
+  "mode": "answers",
+  "metrics": {
+    "min_coverage": 0.5,
+    "n_items": 36,
+    "n_answerable": 26,
+    "n_unanswerable": 10,
+    "correct_abstention_rate": {
+      "hits": 10,
+      "n": 10,
+      "rate": 1.0
+    },
+    "false_abstention_rate": {
+      "hits": 14,
+      "n": 26,
+      "rate": 0.5385
+    },
+    "citation_structure_rate": {
+      "hits": 12,
+      "n": 12,
+      "rate": 1.0
+    },
+    "answer_correctness": {
+      "hits": 11,
+      "n": 26,
+      "rate": 0.4231
+    },
+    "n_graded": 26,
+    "n_gradable": 26,
+    "grading_coverage": {
+      "hits": 26,
+      "n": 26,
+      "rate": 1.0
+    },
+    "grade_counts": {
+      "correct": 11,
+      "incorrect": 15,
+      "unsure": 0
+    },
+    "hit@1": {
+      "hits": 8,
+      "n": 26,
+      "rate": 0.3077
+    },
+    "hit@3": {
+      "hits": 18,
+      "n": 26,
+      "rate": 0.6923
+    }
+  },
+  "judge": "26 answerable item(s) graded; source: human grades supplied by --grades; citation structure is reported separately and is not correctness"
+}

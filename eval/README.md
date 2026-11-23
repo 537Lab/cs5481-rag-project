@@ -139,7 +139,7 @@ All commands run from the repository root and need no API key.
 | `python -m eval.metrics validate --require-reviewed` | fails until a named human attests each unanswerable item (`REVIEWED_BY`) |
 | `python -m eval.metrics retrieval --hits 1,3 --out eval/results/raw/retrieval_fixed.json` | REAL hit@k over the built index (needs `python -m ragkit.cli ingest`) |
 | `python -m eval.metrics retrieval --chunking paragraph --out ...` | the same QA against the other strategy's collection, without editing `config.toml` |
-| `python -m eval.metrics score --run-id <run_id> --grades eval/results/raw/grades.csv` | scores T5's answer artifact `eval/answers/<run_id>.jsonl` |
+| `python -m eval.metrics score --run-id <run_id> --grades eval/review/grades_<run_id>.csv` | scores T5's answer artifact `eval/answers/<run_id>.jsonl` |
 | `python -m eval.metrics mock-demo` | metric maths and CLI wiring on MOCK fixtures; every number is labelled MOCK |
 
 Every command reads `eval/qa_set.csv` unless `--qa` says otherwise, so the team's
