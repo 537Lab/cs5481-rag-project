@@ -1482,3 +1482,105 @@ rank3：`K24`）；按「gold 引文逐字落在召回 chunk 内」的严格口�
 - 26 条 answerable 的人工语义评分与评分者一致性，须由两位非出题人按 `eval/judge_protocol.md` 完成；
 - 答案原件是否入 `eval/answers/` 由 T5 决定（本轮已实测 `score --run-id` 能从该目录读取并复现同一组数字）；
 - 组员本人重跑本轮任何命令；本 PR 的 `ci / check`。
+
+---
+
+## 14. 两份人工评分表的验收与由此暴露的三处缺陷（2026-11-23，T4 第四轮，编码 agent 执行，组员未重跑）
+
+### 14.1 到货与取证（只读，未入库、未改任何 grade）
+
+| 文件 | 大小 | sha256 | `load_grades()` | 说明 |
+| --- | --- | --- | --- | --- |
+| `grades.csv`（评分人 A，`ziqilin669`） | 11090 B | `17cc8677119f7fe085c4d827c16fb2db2166073ca46886bb73acc4df26c13b4b` | **崩溃** | GBK 编码（`0xA1` @ byte 4424），CRLF 37；表头比发出的空白表多出一列 `' Suggested reason'` |
+| `reviewer_notes.txt`（A） | 690 B | `2ed6d5c550f3834bf706115341af3c993e40ce607e2d52251bf156e3c89788fa` | 不适用 | `Review start time: [actual date and time, UTC+18:00]` 为未填占位符且 UTC+18 时区不存在；`Item-specific notes` 仍是模板原文 |
+| `grades_reviewer_B_confirmed_AI_assisted.csv`（评分人 B，`ldk13856478627-cell`） | 9115 B | `cc549a045f5a…` | 通过 | UTF-8/LF；26 行全部来自同一句 `confirmation_note`："all 26 AI suggestions were confirmed … not an independent blind review" |
+
+答案包原件未变，`LOCAL-ollama-fixed-20261122.jsonl` 仍为 `2ca74fde05a52da95c1c0b7b712ddea38ed20ce2a78cdac23775cb1b96346076`，与 B 声称一致。
+`Reviewer_B_confirmed_AI_assisted.xlsx`（16730 B）本轮未读，所以「xlsx 与 csv 是否逐条一致」仍**未验证**。
+
+### 14.2 两份表各自跑出的读数（探针目录 `.tmp/`，不入正式汇总）
+
+A 表重存 UTF-8 后（内容逐字节未改，`answer_text` 与原件 0 差异）：
+
+```
+answer_correctness     1/26  0.0385      grading_coverage 26/26
+```
+
+B 表直接可读：
+
+```
+$ python -m eval.metrics score --outputs .tmp/t5handoff/.../LOCAL-ollama-fixed-20261122.jsonl \
+    --formal --grades grades_reviewer_B_confirmed_AI_assisted.csv --executor 'probe only (agent)' \
+    --summary-dir .tmp/i4_grades_B
+  grade_counts               {'correct': 11, 'incorrect': 15, 'unsure': 0}
+  answer_correctness        11/26  0.4231
+```
+
+同一个答案包、同一份量表，正确率读数区间 `0.0385 – 0.4231`，差 10 倍。
+
+### 14.3 分歧归因：评分人评的是引用展示层，不是被引 chunk
+
+按 `judge_protocol.md` §2 的口径，一致性只在 **answerable 且未拒答**的条目上算，分母 12：
+
+```
+$ python .tmp/i4_adjudicate.py
+rows needing a decision: 12  (disagreements 10, prefix-explained 8)
+consistent items: ['K17', 'K21']
+prefix-explained qids: ['K01', 'K05', 'K07', 'K08', 'K10', 'K11', 'K16', 'K23']
+not prefix-explained disagreements: ['K04', 'K14']
+
+raw agreement  = 2 / 12 = 0.1667 ['K17', 'K21']
+p_e            = 0.1458
+COHEN'S KAPPA  = 0.0244
+marginals A    = {'correct': 1, 'incorrect': 10, 'unsure': 1}
+marginals B    = {'correct': 11, 'incorrect': 1, 'unsure': 0}
+both-unsure    = []
+```
+
+10 条分歧里 8 条落在同一个交叉表上：`gold_in_cited_chunk=True` 且 `gold_in_200char_prefix=False` 的 8 条，A **全部**判 `incorrect`；`=True/True` 的 2 条才是 A 唯一的 `correct`（`K17`）与 `unsure`（`K14`）。原因是答案包的展示层只存被引 chunk 的前 200 字符：`K01` 的 quote 截到 `"A Kubernetes cluster cons"`，而 gold 句 `"A Kubernetes cluster consists of a control plane and one or more worker nodes."` 就在同一 chunk 内几字符之后。
+
+若按 26 行全量算，`p_o = 16/26 = 0.6154` —— 那 14 条一致全部由规则可判的拒答行贡献，**不能**作为评分者一致性汇报。
+
+### 14.4 本轮落地的三处修复（`eval/metrics.py` + `eval/judge_protocol.md` + 5 条测试）
+
+1. **评分表补全文证据列**：`GRADE_COLUMNS` 增加 `cited_chunk_text`（由 `chunk_of=store.get_chunk` 解析被引 chunk 全文，换行折成 `⏎`）。索引不可用时写入 `CHUNK_TEXT_UNRESOLVED` / `CHUNK_TEXT_MISSING` 哨兵而不是留空格 —— 空格会被读成「该 chunk 什么都没写」。实测重生成的表 `K01` 该列 661 字符且含完整 gold 句。
+2. **评分表来源随指标入库**：新增 `grades_provenance()`，`config.json` 记 `grades_ref = <path>@<sha256>` 与 `reviewer_id` / `reviewed_at` / `ai_assisted` / `confirmation_note` 摘要；`run.md` 逐行列出；`metrics.json` 的 `judge` 字段在表自称 AI-assisted 时写明「bulk-confirmed … `judge_protocol.md` §1 不视为盲评人工评分」。B 表实跑输出：
+   ```
+   - grades sheet: …/grades_reviewer_B_confirmed_AI_assisted.csv@cc549a045f5a
+   - grades sheet reviewer_id: ldk13856478627-cell (user-provided)
+   - grades sheet ai_assisted: yes
+   judge: 26 answerable item(s) graded; source: grades confirmed in bulk from a sheet
+          that declares itself AI-assisted, which judge_protocol.md section 1 does not
+          accept as blind human grading; …
+   ```
+   无任何声明列时，`run.md` 记为「provenance unrecorded」，不默认当作人工评分。
+3. **非 UTF-8 评分表给可执行的报错**：`load_grades()` / 答案读取改走 `_read_text_utf8()`，A 表实跑不再抛 traceback：
+   ```
+   $ python -m eval.metrics score … --grades ../grades.csv …
+   ERROR: ..\grades.csv is not valid UTF-8 (invalid start byte at byte 4424); re-save
+          the grades sheet as UTF-8 (in Excel: Save As > 'CSV UTF-8') and rerun
+   exit code: 2
+   ```
+   不猜测编码去「抢救」grade：给一个错数字套干净来历，比报错更贵。
+
+### 14.5 本轮验证
+
+```
+$ python -m ruff check .
+All checks passed!
+$ python -m pytest -o addopts="" -q
+335 passed, 2 skipped in 14.89s
+```
+
+（上一轮基线 330 passed / 2 skipped，本轮新增 5 条：全文列、哨兵、非 UTF-8 报错、AI-assisted 不得被写成盲评、无声明列须记为 unrecorded。）
+
+### 14.6 裁决工作表（决策 A 的待办物，未入库）
+
+`.tmp/i4_adjudication_worksheet.csv`（18838 B）与 `.md`（19034 B）：12 条需人判断的条目，每条并排列出题面、`reference_answer`、gold 引文与出处、模型答案、被引 chunk 全文、200 字符前缀、`gold_in_cited_chunk` / `gold_in_prefix`、A 的 grade+理由、B 的 grade+理由，`third_grade` / `third_note` **留空待填**。其余 14 条拒答属规则判定，不需要人。
+
+### 14.7 仍未做
+
+- A 的 8 条前缀误判尚未由 A 本人重判；两张表都还不含逐项人工判断，`answer_correctness` 仍无可入库口径；
+- 裁决工作表未填写、未入库（填完的合并表按 §1 护栏放 `eval/review/`）；
+- `Reviewer_B_confirmed_AI_assisted.xlsx` 与 csv 的逐条一致性；
+- 组员本人重跑本轮任何命令；本 PR 的 `ci / check`。

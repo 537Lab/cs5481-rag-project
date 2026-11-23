@@ -43,7 +43,18 @@ group budget is involved.
 where possible. A single self-graded run is not a result; it is a smoke test.
 
 **What a rater sees.** The grading sheet is written from the answer artifact
-that T5 produces (interface I4, `eval/answers/<run_id>.jsonl`):
+that T5 produces (interface I4, `eval/answers/<run_id>.jsonl`). The sheet carries
+`cited_chunk_text`: the **full** text of every chunk the answer cited. That column
+exists because the artifact itself stores only the first 200 characters of a cited
+chunk as its quote, and a rater who reads that prefix instead of the chunk is
+testing the window they were handed rather than the answer - which is exactly what
+happened to eight items on 2026-11-22, when grades were written as "the citation
+excerpt does not contain the supporting statement" about sentences that sit a few
+characters further down in the very chunk that was cited. If the column shows
+`<CITED CHUNK TEXT NOT RESOLVED ...>` (no index was available when the sheet was
+written) or `<CITED CHUNK <id> NOT FOUND IN THE INDEX ...>` (an id the store does
+not know), the sheet cannot support a citation judgement at all: ingest the index
+and regenerate it instead of grading the gap.
 
 ```
 python -m eval.metrics score --run-id <run_id> \
@@ -62,16 +73,30 @@ only evidence behind `answer_correctness`, so they must be reviewable in the
 repository the way the gold quotes are.
 
 Columns: `qid`, `category`, `question`, `reference_answer`, `answer_text`,
-`citations`, `abstained`, `grade`. Only `category == answerable` rows are for
-grading: a grade entered on an unanswerable qid is dropped from
+`citations`, `cited_chunk_text`, `abstained`, `grade`, then the three declaration
+columns `reviewer_id`, `reviewed_at`, `ai_assisted`. Only `category == answerable`
+rows are for grading: a grade entered on an unanswerable qid is dropped from
 `answer_correctness` and listed under `grades_dropped_as_unanswerable`, so a
 mistake on the sheet stays visible instead of quietly changing the denominator.
-Raters fill `grade` **independently**, in the same sitting, without discussing
-items, and without looking at the generation code, prompt, model name, or
-retrieval scores. Seeing `answer_text` next to `reference_answer` is unavoidable
-and accepted; what is excluded is knowledge of *which system variant produced the
-answer*. If a variant comparison is being graded, shuffle the rows and hide the
-variant label first.
+
+**Fill the declaration columns, and mean them.** `load_grades()` scores from
+`qid` and `grade` alone, so what the sheet says about its own provenance has no
+effect on the arithmetic - and would vanish entirely if `score` did not copy it.
+It does: `run.md` records the grades file as `path@sha256` plus the declared
+`reviewer_id` / `reviewed_at` / `ai_assisted`, and `metrics.json` names the source
+of the grades in its `judge` field. A sheet with no declaration columns is
+reported as unrecorded provenance rather than quietly counted as human grading.
+
+An AI may prepare the evidence - pull the cited chunk, line the answer up against
+the reference answer, format the file. It may not supply the grade. Accepting a
+machine's list of suggestions in bulk is not an independent grading pass under
+this section, however the person signs it, and `judge_protocol.md` is the place
+that says so. Raters fill `grade` **independently**, in the same sitting,
+without discussing items, and without looking at the generation code, prompt,
+model name, or retrieval scores. Seeing `answer_text` next to `reference_answer`
+is unavoidable and accepted; what is excluded is knowledge of *which system
+variant produced the answer*. If a variant comparison is being graded, shuffle
+the rows and hide the variant label first.
 
 **The grade scale.** Exactly three values, enforced by `load_grades()`:
 
@@ -79,7 +104,11 @@ variant label first.
 | --- | --- | --- |
 | `correct` | the answer states the fact in `reference_answer`; every quoted span really supports it | numerator **and** denominator |
 | `incorrect` | wrong, contradicted by the gold evidence, evasive, or the citation does not support the sentence it backs | denominator only |
-| `unsure` | the rater cannot decide from `answer_text` + `citations` alone | denominator only |
+| `unsure` | the rater cannot decide from `answer_text` + `cited_chunk_text` alone | denominator only |
+
+"The citation does not support it" is judged against **the cited chunk's full text**
+(`cited_chunk_text`), never against the artifact's truncated quote prefix. Where the
+two disagree, the chunk is the evidence and the prefix is a display limit.
 
 `unsure` is deliberately counted as **not correct**, never dropped. Dropping
 hard items would silently inflate the rate; keeping them in the denominator is
@@ -94,7 +123,13 @@ rate: a 1/1 rate at 1/26 coverage is a smoke test, not a result.
 
 **Adjudication.** Where the two raters disagree, a third member picks
 `correct` / `incorrect` for that item after re-reading the gold quote in the
-source document. The adjudicated value is what goes into the final
+source document. Only answerable, non-abstained items are adjudicable: a refusal
+is scored by rule, so routing it through a human manufactures agreement on rows
+nobody had to judge. The third member is handed a worksheet, not a summary - the
+item, the reference answer, the gold quote with its doc id, the answer, the full
+cited chunk, and both raters' grades and notes side by side, with the decision
+cell left blank. "Re-read the source document" means opening the chunk; a quote
+excerpt is not the source. The adjudicated value is what goes into the final
 `grades.csv`. Extra free-text columns are tolerated by `load_grades()` (it only
 requires `qid` and `grade`), so add a `judge_note` column to the sheet and record
 each disagreement and its reason there; that column is the audit trail and the

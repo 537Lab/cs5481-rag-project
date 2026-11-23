@@ -265,3 +265,33 @@ Codex 在 PR #11 的 `c4516bf29317270b876193f66e864f8f053f785f` 独立检出中�
 以及任何 `REVIEWED_BY` 签名。本轮**没有产生正确率数字**，`answer_correctness` 保持
 `pending human grading`；`citation_structure_rate 12/12` 是结构校验，不作为事实正确性引用。
 全程离线，未调用付费 API，未使用 AI 生成的模拟结果。
+
+### 2026-11-23 T4 评分表验收与记录完整性修复（Qoder 编码 agent）
+
+本节由 agent 撰写。本轮 AI 参与的边界，正是这一轮验收的主题，所以先说结论：**两份到货的人工评分表都不能
+当作人工评分结果用**，agent 没有代它们任何一个补写 grade。
+
+agent 做的（可机械复核部分）：对两份表做字节级取证（编码、sha256、CRLF、表头比对）、用 `load_grades()` /
+`score --grades` 验证可读性、复算评分人声称的 tally 与答案包哈希、逐条回查 gold 引文在被引 chunk 与其
+200 字符前缀中的位置并生成交叉表、按 `judge_protocol.md` §2 口径手算 raw agreement 与 Cohen's kappa（分母 12）、
+生成 12 条待裁决的评分工作表（`third_grade` 全部留空）。
+
+agent 改的代码：`eval/metrics.py` 新增 `_read_text_utf8()` / `_cited_chunk_text()` / `grades_provenance()`，
+`GRADE_COLUMNS` 增加 `cited_chunk_text` 与 `reviewer_id` / `reviewed_at` / `ai_assisted` 声明列，`run.md` 记录
+评分表 `path@sha256` 与声明内容，`metrics.json` 的 `judge` 字段如实写明该数字来自 AI 辅助批量确认；同步
+`eval/judge_protocol.md` §1 的量表与证据说明；新增 5 条测试。本机 `ruff check .` 通过，
+`python -m pytest -o addopts="" -q` **335 passed / 2 skipped**。`--executor` 均显式写 coding agent，未用缺省值。
+
+本轮刻意没有做的几件事，与上述修改同样重要：
+
+1. **没有修改任何一条 grade**，也没有“替评分人把前缀截断造成的 8 条改回来”——那正是本文件要记录的 AI 越界。
+   重判必须回到评分人本人或第三人裁决。
+2. **没有把两张表入仓**（包括看起来干净的 B 表），也没有把它们当正式读数覆盖 `eval/results/summary/i4_answer_metrics/`；
+   验证只写向 `.tmp/` 探针目录。`answer_correctness` 仍为 `pending human grading`。
+3. **没有在 `metrics.py` 里实现 kappa**。协议 §2 本来就把一致性计算排除在代码之外，本轮手算结果只用于验收，
+   不等于把它伪造成一个系统输出。
+4. 没读 `Reviewer_B_confirmed_AI_assisted.xlsx`，因此未声称 xlsx 与 csv 一致。
+
+一个对 agent 自身的提醒：本轮暴露的根因不在评分人，而在 agent 上一轮发出的评分包只附了引用截断前缀。
+上一轮只把全文放在另一个归档文件里，并未进入评分人直接阅读的那一列。因此本轮除了修文档，还修了默认材料本身，
+并在 `judge_protocol.md` 里写明：“引用是否支持”只能对着 `cited_chunk_text` 判，不能对着展示前缀判。

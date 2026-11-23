@@ -151,3 +151,27 @@ hit@1 0.3077、hit@3 0.6923，`answer_correctness` 仍为 pending human grading�
 答案原件按 T5 的指示不入 Git，所以这份汇总是「按哈希可核」而非「按 CI 可复现」；要在 CI 里复现，
 需要 T5 把 jsonl 放进 `eval/answers/<run_id>.jsonl`（`score --run-id` 已实测可用）。
 人工评分、评分者一致性、`REVIEWED_BY` 之外的语义判断均未做，不由 agent 代填。云端 `ci / check` 待本 PR 触发。
+
+### 2026-11-23 T4 人工评分表验收：两份均不满足协议 §1，正确率仍不可报（编码 agent 执行）
+
+收到两份评分表。均只做只读取证，**未入库、未修改任何 grade、未填任何签名**。
+
+- 评分人 A（`ziqilin669`，`grades.csv` + `reviewer_notes.txt`）：文件为 GBK 而非 UTF-8，`load_grades()` 直接
+  `UnicodeDecodeError`；备注里评审起止时间仍是未填占位符（且写成不存在的 UTC+18），逐条说明未填。
+  26 条中仅 1 条 `correct`（`K17`）1 条 `unsure`（`K14`），读数 `1/26 = 0.0385`。他自己声明参与过生成配置并参考
+  AI 预审意见，按 §1 “不得看生成代码/提示词/模型名” 不构成盲评。
+- 评分人 B（`ldk13856478627-cell`）：表可直接读，26 条 tally `correct 11 / incorrect 15` 与声称一致，答案包
+  sha256 声称属实，读数 `11/26 = 0.4231`。但每行 `confirmation_note` 原文为“all 26 AI suggestions were
+  confirmed … not an independent blind review”，即**逐项人工判断数为 0**，同样不满足 §1。
+
+关键发现：两人 12 条可比条目上差 10 条，其中 **8 条完全可由“gold 句是否落在引用 prefix 前 200 字符内”预测**。
+这不是“谁评错了”，而是评分材料只给了截断前缀，评分人评的是展示窗口而非被引 chunk。按 §2 口径的一致性为
+`p_o = 2/12`、`kappa = 0.0244`；若用 26 行全量算会得到 `0.6154`，那全部由 14 条规则可判的拒答行贡献，不得写进报告。
+
+因此本轮除了决策 A 的裁决工作表，还落了三处 T4 侧修复（详见 `../RUNLOG.md` §14）：评分表增加 `cited_chunk_text`
+全文证据列；`config.json` / `run.md` / `metrics.json` 开始记录评分表的 `path@sha256` 与
+`reviewer_id` / `reviewed_at` / `ai_assisted`，AI 批量确认的表不会再被当成人工盲评读数；非 UTF-8 表给可执行报错而
+不是 traceback。`ruff` 通过，`pytest` **335 passed / 2 skipped**（新增 5 条）。
+
+**人工复核状态：**`answer_correctness` 仍为 pending。待 A 本人按全文重判 8 条、待第三人裁决 `K04` / `K14`，
+合并表填入 `eval/review/` 后才能重跑正式汇总。`Reviewer_B_confirmed_AI_assisted.xlsx` 与 csv 的逐条一致性尚未验证。
