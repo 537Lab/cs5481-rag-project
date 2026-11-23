@@ -355,6 +355,30 @@ def test_preopened_client_writes_after_other_client_clear(tmp_path, chunks):
     assert first.count() == 0
 
 
+@pytest.mark.parametrize("first_read", ["count", "get_chunk", "search"])
+def test_preopened_client_reads_after_other_client_rebuild(tmp_path, chunks, first_read):
+    """Each read entrypoint independently recovers from a stale collection UUID."""
+    first = ChromaStore(tmp_path, "rebound_readers")
+    second = ChromaStore(tmp_path, "rebound_readers")
+    first.upsert([chunks[0]], [[1, 0]])
+    assert second.get_chunk(chunks[0].chunk_id) == chunks[0]
+
+    first.clear()
+    # Each parameter starts from a fresh stale client. Checking count first in
+    # all cases would rebind before get_chunk/search exercised their own paths.
+    if first_read == "count":
+        assert second.count() == 0
+    elif first_read == "get_chunk":
+        assert second.get_chunk(chunks[0].chunk_id) is None
+    else:
+        assert second.search([1, 0], 3) == []
+
+    first.upsert([chunks[1]], [[0, 1]])
+    assert second.count() == 1
+    assert second.get_chunk(chunks[1].chunk_id) == chunks[1]
+    assert second.search([0, 1], 1)[0].chunk == chunks[1]
+
+
 @pytest.mark.parametrize("scale", [1e-50, 1e-30, 1e20, 1e308, 5e-324])
 def test_extreme_finite_vectors_preserve_real_chroma_cosine(tmp_path, chunks, scale):
     import math
