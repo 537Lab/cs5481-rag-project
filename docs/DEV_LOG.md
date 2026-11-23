@@ -175,3 +175,22 @@ hit@1 0.3077、hit@3 0.6923，`answer_correctness` 仍为 pending human grading�
 
 **人工复核状态：**`answer_correctness` 仍为 pending。待 A 本人按全文重判 8 条、待第三人裁决 `K04` / `K14`，
 合并表填入 `eval/review/` 后才能重跑正式汇总。`Reviewer_B_confirmed_AI_assisted.xlsx` 与 csv 的逐条一致性尚未验证。
+
+### 2026-11-23 T4 第三人裁决完成，`answer_correctness` 正式入库（编码 agent 执行）
+
+T3 负责人 `usagi` 完成 12 条裁决，返回 `i4_adjudication_worksheet_third_review_AI_assisted_FINAL.csv`。
+验收通过：前 16 列未改、tally 11/1/0 属实、12 条 note 各不相同且引文可核。成员声明 AI 辅助证据整理，
+但 grades 由人裁决——与 B 的批量确认性质不同。
+
+合并 12 条裁决 + 14 条规则拒答 → `eval/review/grades_LOCAL-ollama-fixed-20261122.csv`（26 行，UTF-8 无 BOM）。
+重跑正式汇总：`answer_correctness = 11/26 = 0.4231`，`grading_coverage = 26/26 = 1.0000`。
+
+K04 是唯一弱项：gold 句在被引 chunk 里找不到，但 chunk 的 flag 表支持一步推理。第三人 note 自承 inference，
+T4 接受此裁决。若严格到只认逐字支持，数字为 10/26 = 0.3846。
+
+A/B 一致性仍报 `kappa = 0.0244`（分母 12），根因是材料缺陷（前缀截断）而非评分人信度。第三人裁决不产生
+新的独立性对，因此一致性数字不变。
+
+**人工复核状态：** `answer_correctness` 已入库，可写进报告。待做：报告正文如何呈现 0.4231 与 0.0244 的一致性
+数字（T4 待写）；`Reviewer_B_confirmed_AI_assisted.xlsx` 与 csv 的逐条一致性；组员本人重跑本轮任何命令；
+本 PR 的 `ci / check`。

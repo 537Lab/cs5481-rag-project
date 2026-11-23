@@ -34,7 +34,32 @@
   "qa_docs_outside_frozen_snapshot": [],
   "qa_corpus_binding_verified": true,
   "outputs_file": ".tmp/t5handoff/eval/results/raw/ollama-20261122/LOCAL-ollama-fixed-20261122.jsonl",
-  "grades_file": null,
+  "grades_file": "eval/review/grades_LOCAL-ollama-fixed-20261122.csv",
+  "grades_ref": "eval/review/grades_LOCAL-ollama-fixed-20261122.csv@754d6f280d35",
+  "grades_provenance": {
+    "columns": [
+      "reviewer_id",
+      "reviewed_at",
+      "ai_assisted",
+      "judge_note"
+    ],
+    "reviewer_id": [
+      "rule (both A and B agreed)",
+      "usagi (adjudicator)"
+    ],
+    "reviewed_at": [
+      "2026-11-22",
+      "2026-11-23"
+    ],
+    "ai_assisted": [
+      "n/a (rule-scored)",
+      "yes (evidence prep, grades by adjudicator)"
+    ],
+    "judge_note_rows_filled": 26,
+    "judge_note_distinct": 13,
+    "judge_note_first": "In cited_chunk_text, immediately after \"Some Pods have init containers\", the next sentence says init containers run and complete before app containers start.",
+    "declared_ai_assisted": false
+  },
   "run_id": "LOCAL-ollama-fixed-20261122",
   "config_ref": "eval\\results\\raw\\ollama-20261122\\LOCAL-ollama-fixed-20261122.config.json",
   "models": [

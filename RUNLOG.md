@@ -1584,3 +1584,91 @@ $ python -m pytest -o addopts="" -q
 - 裁决工作表未填写、未入库（填完的合并表按 §1 护栏放 `eval/review/`）；
 - `Reviewer_B_confirmed_AI_assisted.xlsx` 与 csv 的逐条一致性；
 - 组员本人重跑本轮任何命令；本 PR 的 `ci / check`。
+
+---
+
+## 15. 第三人裁决完成与正式正确率入库（2026-11-23，T4 第五轮，编码 agent 执行，组员未重跑）
+
+### 15.1 裁决表到货与取证
+
+T3 负责人 `usagi` 完成 12 条裁决，返回 `i4_adjudication_worksheet_third_review_AI_assisted_FINAL.csv`（21165 B，UTF-8 with BOM，sha256 `a33c99b7bde5e8ff5bac5285962b860ad947c433dcc2b07ffd575a5aa00cbada`）。成员声明："本次使用了 AI 辅助证据整理与核验"。
+
+验收检查：
+
+| 检查项 | 结果 |
+|---|---|
+| 前 16 列是否被改 | **0 处实质性差异**（与发出的裁决工作表逐字节比对） |
+| 12 条 grade 是否合法 | 全部 `correct` / `incorrect`，无空值、无非法值 |
+| tally 与声称 | **11 correct / 1 incorrect / 0 unsure ✓** |
+| 12 条 note 是否各不相同 | **12/12 distinct**，平均 181 字符 |
+| note 里引文是否真在被引 chunk | 10/12 全部命中；K04 有 1 处引文不在 chunk 里但 note 自承 inference；K14 无引文但 paraphrase 与 chunk 内容吻合 |
+| 第三人 vs B 一致率 | **12/12**（与 B 完全一致） |
+| 第三人 vs A 一致率 | 2/12（只在 K17、K21 一致，那两条 A/B 本来就一致） |
+
+**12/12 与 B 一致不是坏事**：B 的 8 条前缀误判现在有了全文证据支撑，第三人独立读到全文后判 B 对，这是预期的。真正要警惕的是"又抄了一遍 B 的答案"——但 12 条 note 各不相同、每条都指向 chunk 内具体位置、K04 还主动标注了 inference，**这不是批量确认的套路**。
+
+### 15.2 K04 的弱项标注
+
+K04 是唯一一条裁决为 `correct` 但 gold 句不在被引 chunk 里的条目：
+
+- gold 句在 `k8s_v135_nodes#0010`
+- 模型引了 `k8s_v135_nodes#0005`（flag 表）
+- 检索没把 gold chunk 放进 top-3
+- 但 `#0005` 里确实写着 `--register-node` = "Automatically register" 和 "No-op if `register-node` is false"
+- 第三人自己的 note 明说："supports ... by inference, though the manual-creation sentence is not quoted verbatim"
+
+这是诚实的弱项标注。按协议 §1 量表，`correct` 要求 "every quoted span really supports it"——`#0005` 支持 `--register-node=false` 禁用自注册是一步推理，不是直接引用。T4 接受此裁决，最终数字 **11/26 = 0.4231**；若严格到只认逐字支持，则是 **10/26 = 0.3846**。
+
+### 15.3 合并表与正式汇总
+
+合并 12 条裁决 + 14 条规则拒答（A 和 B 双方一致 `incorrect`）→ `eval/review/grades_LOCAL-ollama-fixed-20261122.csv`（12329 B，26 行，UTF-8 无 BOM）。
+
+```
+$ python -m eval.metrics score --outputs .tmp/t5handoff/.../LOCAL-ollama-fixed-20261122.jsonl \
+    --formal --grades eval/review/grades_LOCAL-ollama-fixed-20261122.csv \
+    --executor 'adjudicated by usagi (T3); 14 refusals rule-scored by A+B agreement; AI-assisted evidence prep only' \
+    --summary-dir eval/results/summary/i4_answer_metrics
+  min_coverage             0.5
+  n_items                  36
+  n_answerable             26
+  correct_abstention_rate  10/10  1.0000
+  false_abstention_rate    14/26  0.5385
+  citation_structure_rate  12/12  1.0000
+  answer_correctness       11/26  0.4231
+  n_graded                 26
+  grading_coverage         26/26  1.0000
+  hit@1                     8/26  0.3077
+  hit@3                    18/26  0.6923
+```
+
+`run.md` 记录：
+
+```
+- grades sheet: eval/review/grades_LOCAL-ollama-fixed-20261122.csv@754d6f280d35
+- grades sheet reviewer_id: rule (both A and B agreed), usagi (adjudicator)
+- grades sheet reviewed_at: 2026-11-22, 2026-11-23
+- grades sheet ai_assisted: n/a (rule-scored), yes (evidence prep, grades by adjudicator)
+```
+
+`metrics.json` 的 `judge` 字段：`26 answerable item(s) graded; source: human grades supplied by --grades; citation structure is reported separately and is not correctness`。
+
+### 15.4 一致性数字
+
+按协议 §2 口径，A/B 两表的一致性（分母 12）：`p_o = 2/12 = 0.1667`、`p_e = 0.1458`、**kappa = 0.0244**。第三人裁决不产生新的独立性对，因此一致性数字仍报 0.0244，并在报告限制部分注明根因是材料缺陷（前缀截断）而非评分人信度。
+
+### 15.5 本轮验证
+
+```
+$ python -m ruff check .
+All checks passed!
+$ python -m pytest -o addopts="" -q
+335 passed, 2 skipped in 14.10s
+```
+
+（与上轮基线相同，本轮未新增测试。）
+
+### 15.6 仍未做
+
+- `Reviewer_B_confirmed_AI_assisted.xlsx` 与 csv 的逐条一致性；
+- 组员本人重跑本轮任何命令；本 PR 的 `ci / check`；
+- 报告正文里如何呈现 0.4231 与 0.0244 的一致性数字（T4 待写）。

@@ -295,3 +295,40 @@ agent 改的代码：`eval/metrics.py` 新增 `_read_text_utf8()` / `_cited_chun
 一个对 agent 自身的提醒：本轮暴露的根因不在评分人，而在 agent 上一轮发出的评分包只附了引用截断前缀。
 上一轮只把全文放在另一个归档文件里，并未进入评分人直接阅读的那一列。因此本轮除了修文档，还修了默认材料本身，
 并在 `judge_protocol.md` 里写明：“引用是否支持”只能对着 `cited_chunk_text` 判，不能对着展示前缀判。
+
+### 2026-11-23 T4 第三人裁决完成与正式正确率入库（Qoder 编码 agent）
+
+本节由 agent 撰写。T3 负责人 `usagi` 完成 12 条裁决，返回 `i4_adjudication_worksheet_third_review_AI_assisted_FINAL.csv`。
+成员声明"本次使用了 AI 辅助证据整理与核验"。
+
+agent 做的（可机械复核部分）：
+
+1. 字节级取证：UTF-8 with BOM、sha256 `a33c99b7…`、前 16 列与发出的裁决工作表逐字节一致（0 处实质性差异）。
+2. 复算 tally：11 correct / 1 incorrect / 0 unsure，与声称一致。
+3. 12 条 note 各不相同（12/12 distinct），平均 181 字符，每条指向 `cited_chunk_text` 内具体位置。
+4. 逐条验证 note 里引文是否真在被引 chunk：10/12 全部命中；K04 有 1 处引文不在 chunk 里但 note 自承 inference；
+   K14 无引文但 paraphrase 与 chunk 内容吻合。
+5. 交叉表：第三人 vs B 一致率 12/12，第三人 vs A 一致率 2/12（只在 K17、K21 一致，那两条 A/B 本来就一致）。
+6. K04 弱项标注：gold 句在被引 chunk 里找不到，但 chunk 的 flag 表支持一步推理；第三人 note 自承 inference，
+   T4 接受此裁决。若严格到只认逐字支持，数字为 10/26 = 0.3846。
+7. 合并 12 条裁决 + 14 条规则拒答 → `eval/review/grades_LOCAL-ollama-fixed-20261122.csv`（26 行，UTF-8 无 BOM）。
+8. 重跑正式汇总：`answer_correctness = 11/26 = 0.4231`，`grading_coverage = 26/26 = 1.0000`。
+
+agent 刻意没有做的几件事：
+
+1. **没有修改任何一条 grade**。第三人裁决的 12 条 grade 原样入库，14 条拒答从 A/B 双方一致的 `incorrect` 提取，
+   agent 未代判任何一条。
+2. **没有把第三人当成第二位独立评分人**。裁决（Adjudication）按协议本来就是"看过分歧之后重读原文"，
+   所以给第三人看 A/B 的 grade 是合规的——但第三人不能因此充当第二位独立评分人。A/B 一致性仍报 `kappa = 0.0244`，
+   根因是材料缺陷（前缀截断）而非评分人信度。
+3. **没有代填 `reviewer_id`**。成员未署名，T4 确认第三人为 `usagi`（T3 负责人）后，agent 才写入合并表。
+   若 T4 未确认，agent 会留空并追问，不会自作主张填任何名字。
+4. **没有隐瞒 AI 辅助声明**。合并表的 `ai_assisted` 列对 12 条裁决写 "yes (evidence prep, grades by adjudicator)"，
+   对 14 条规则拒答写 "n/a (rule-scored)"——如实区分，不笼统标 "yes" 也不笼统标 "no"。
+
+`--executor` 显式写成 "adjudicated by usagi (T3); 14 refusals rule-scored by A+B agreement; AI-assisted evidence prep only"，
+未用缺省值。本机 `ruff check .` 通过，`python -m pytest -o addopts="" -q` **335 passed / 2 skipped**。
+
+**人工复核状态：** `answer_correctness = 11/26 = 0.4231` 已入库，可写进报告。待做：报告正文如何呈现 0.4231 与
+0.0244 的一致性数字（T4 待写）；`Reviewer_B_confirmed_AI_assisted.xlsx` 与 csv 的逐条一致性；组员本人重跑本轮任何命令；
+本 PR 的 `ci / check`。
