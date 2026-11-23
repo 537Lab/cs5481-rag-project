@@ -304,3 +304,133 @@ PR #14 的冻结 Kubernetes 语料已进入 `main`，PR #15 的正式 QA 人工�
 Codex 在 PR #11 的 `c4516bf29317270b876193f66e864f8f053f785f` 独立检出中使用已缓存的 ONNX `all-MiniLM-L6-v2` 与本机 Chroma，实际进行 fixed / paragraph 入库，分别执行 36 道正式 QA 的完整排名诊断并用新进程复查。执行命令、时间、输入和输出指纹见 [RETRIEVAL.md](RETRIEVAL.md)。测试 `143 passed`、全量 `328 passed / 2 skipped`，Ruff 通过。
 
 本轮实验使用本机 embedding，生成、收费 embedding 及 judge 的 API 调用均为 0。Codex 补充了本节、开发记录和检索复跑说明。刘悦伟本人复核与组员 Approve 均待完成。
+
+
+### 2026-11-22 T4 I4 汇总与 metrics CLI 缺陷修复（Qoder 编码 agent）
+
+本节由 agent 撰写。agent 完成的是可机械复核的部分：接收并解压 T5 交接包、复算 zip 与 jsonl 的 sha256、
+做 qid 双向差集、12 条引用逐字回查、从冻结快照重建 chunker 得到 668 chunks 以对齐对方自检、
+运行 `python -m eval.metrics score --formal` 生成 `eval/results/summary/i4_answer_metrics/`、
+修改 `eval/metrics.py`（`_command_line()` 改 `shlex.join`；`--grades` 改 `append` 并对重复传参 `exit=2`）、
+把 `eval/judge_protocol.md` 与 `eval/README.md` 的评分表路径从被忽略的 `eval/results/raw/` 移到 `eval/review/`、
+新增 2 条测试，并在本机执行 `ruff check .` 与 `python -m pytest -o addopts="" -q`（330 passed / 2 skipped）。
+
+`run.md` 里的 `executor` 由 agent 显式写成「coding agent …; human rerun pending」，
+没有使用缺省的 `git config user.name`：否则一次 agent 执行会被记成组员本人跑过。
+
+没有 AI 参与、也不允许 AI 代做的部分：26 条 answerable 的语义评分、评分者一致性计算、
+以及任何 `REVIEWED_BY` 签名。本轮**没有产生正确率数字**，`answer_correctness` 保持
+`pending human grading`；`citation_structure_rate 12/12` 是结构校验，不作为事实正确性引用。
+全程离线，未调用付费 API，未使用 AI 生成的模拟结果。
+
+### 2026-11-23 T4 评分表验收与记录完整性修复（Qoder 编码 agent）
+
+本节由 agent 撰写。本轮 AI 参与的边界，正是这一轮验收的主题，所以先说结论：**两份到货的人工评分表都不能
+当作人工评分结果用**，agent 没有代它们任何一个补写 grade。
+
+agent 做的（可机械复核部分）：对两份表做字节级取证（编码、sha256、CRLF、表头比对）、用 `load_grades()` /
+`score --grades` 验证可读性、复算评分人声称的 tally 与答案包哈希、逐条回查 gold 引文在被引 chunk 与其
+200 字符前缀中的位置并生成交叉表、按 `judge_protocol.md` §2 口径手算 raw agreement 与 Cohen's kappa（分母 12）、
+生成 12 条待裁决的评分工作表（`third_grade` 全部留空）。
+
+agent 改的代码：`eval/metrics.py` 新增 `_read_text_utf8()` / `_cited_chunk_text()` / `grades_provenance()`，
+`GRADE_COLUMNS` 增加 `cited_chunk_text` 与 `reviewer_id` / `reviewed_at` / `ai_assisted` 声明列，`run.md` 记录
+评分表 `path@sha256` 与声明内容，`metrics.json` 的 `judge` 字段如实写明该数字来自 AI 辅助批量确认；同步
+`eval/judge_protocol.md` §1 的量表与证据说明；新增 5 条测试。本机 `ruff check .` 通过，
+`python -m pytest -o addopts="" -q` **335 passed / 2 skipped**。`--executor` 均显式写 coding agent，未用缺省值。
+
+本轮刻意没有做的几件事，与上述修改同样重要：
+
+1. **没有修改任何一条 grade**，也没有“替评分人把前缀截断造成的 8 条改回来”——那正是本文件要记录的 AI 越界。
+   重判必须回到评分人本人或第三人裁决。
+2. **没有把两张表入仓**（包括看起来干净的 B 表），也没有把它们当正式读数覆盖 `eval/results/summary/i4_answer_metrics/`；
+   验证只写向 `.tmp/` 探针目录。`answer_correctness` 仍为 `pending human grading`。
+3. **没有在 `metrics.py` 里实现 kappa**。协议 §2 本来就把一致性计算排除在代码之外，本轮手算结果只用于验收，
+   不等于把它伪造成一个系统输出。
+4. 没读 `Reviewer_B_confirmed_AI_assisted.xlsx`，因此未声称 xlsx 与 csv 一致。
+
+一个对 agent 自身的提醒：本轮暴露的根因不在评分人，而在 agent 上一轮发出的评分包只附了引用截断前缀。
+上一轮只把全文放在另一个归档文件里，并未进入评分人直接阅读的那一列。因此本轮除了修文档，还修了默认材料本身，
+并在 `judge_protocol.md` 里写明：“引用是否支持”只能对着 `cited_chunk_text` 判，不能对着展示前缀判。
+
+### 2026-11-23 T4 第三人裁决完成与正式正确率入库（Qoder 编码 agent）
+
+本节由 agent 撰写。T3 负责人 `usagi` 完成 12 条裁决，返回 `i4_adjudication_worksheet_third_review_AI_assisted_FINAL.csv`。
+成员声明"本次使用了 AI 辅助证据整理与核验"。
+
+agent 做的（可机械复核部分）：
+
+1. 字节级取证：UTF-8 with BOM、sha256 `a33c99b7…`、前 16 列与发出的裁决工作表逐字节一致（0 处实质性差异）。
+2. 复算 tally：11 correct / 1 incorrect / 0 unsure，与声称一致。
+3. 12 条 note 各不相同（12/12 distinct），平均 181 字符，每条指向 `cited_chunk_text` 内具体位置。
+4. 逐条验证 note 里引文是否真在被引 chunk：10/12 全部命中；K04 有 1 处引文不在 chunk 里但 note 自承 inference；
+   K14 无引文但 paraphrase 与 chunk 内容吻合。
+5. 交叉表：第三人 vs B 一致率 12/12，第三人 vs A 一致率 2/12（只在 K17、K21 一致，那两条 A/B 本来就一致）。
+6. K04 弱项标注：gold 句在被引 chunk 里找不到，但 chunk 的 flag 表支持一步推理；第三人 note 自承 inference，
+   T4 接受此裁决。若严格到只认逐字支持，数字为 10/26 = 0.3846。
+7. 合并 12 条裁决 + 14 条规则拒答 → `eval/review/grades_LOCAL-ollama-fixed-20261122.csv`（26 行，UTF-8 无 BOM）。
+8. 重跑正式汇总：`answer_correctness = 11/26 = 0.4231`，`grading_coverage = 26/26 = 1.0000`。
+
+agent 刻意没有做的几件事：
+
+1. **没有修改任何一条 grade**。第三人裁决的 12 条 grade 原样入库，14 条拒答从 A/B 双方一致的 `incorrect` 提取，
+   agent 未代判任何一条。
+2. **没有把第三人当成第二位独立评分人**。裁决（Adjudication）按协议本来就是"看过分歧之后重读原文"，
+   所以给第三人看 A/B 的 grade 是合规的——但第三人不能因此充当第二位独立评分人。A/B 一致性仍报 `kappa = 0.0244`，
+   根因是材料缺陷（前缀截断）而非评分人信度。
+3. **没有代填 `reviewer_id`**。成员未署名，T4 确认第三人为 `usagi`（T3 负责人）后，agent 才写入合并表。
+   若 T4 未确认，agent 会留空并追问，不会自作主张填任何名字。
+4. **没有隐瞒 AI 辅助声明**。合并表的 `ai_assisted` 列对 12 条裁决写 "yes (evidence prep, grades by adjudicator)"，
+   对 14 条规则拒答写 "n/a (rule-scored)"——如实区分，不笼统标 "yes" 也不笼统标 "no"。
+
+`--executor` 显式写成 "adjudicated by usagi (T3); 14 refusals rule-scored by A+B agreement; AI-assisted evidence prep only"，
+未用缺省值。本机 `ruff check .` 通过，`python -m pytest -o addopts="" -q` **335 passed / 2 skipped**。
+
+**人工复核状态：** `answer_correctness = 11/26 = 0.4231` 已入库，可写进报告。待做：报告正文如何呈现 0.4231 与
+0.0244 的一致性数字（T4 待写）；`Reviewer_B_confirmed_AI_assisted.xlsx` 与 csv 的逐条一致性；组员本人重跑本轮任何命令；
+本 PR 的 `ci / check`。
+
+### 2026-11-23 xlsx/csv 一致性验证与报告正文完成（Qoder 编码 agent）
+
+本节由 agent 撰写。验证 `Reviewer_B_confirmed_AI_assisted.xlsx` 与 `grades_reviewer_B_confirmed_AI_assisted.csv` 
+的逐条一致性，并完成报告正文。
+
+**xlsx/csv 验证**：
+
+agent 做的（可机械复核部分）：
+1. 安装 openpyxl 到 venv（之前未安装）
+2. 解析 xlsx 结构：3 sheets（"AI pre-review", "Evidence", "Method"），数据在 "AI pre-review" sheet 第 7 行起
+3. 逐条比对 grades：26/26 完全一致（11 correct / 15 incorrect）
+4. 比对其他字段：xlsx 是简化记录（无 reviewer_id/reviewed_at/ai_assisted，judge_note 全部写 "User confirmed..."）；
+   csv 是增强版（含逐条理由、元数据、AI-assisted 声明）
+5. 结论：grades 实质一致，csv 更透明。可接受。
+
+agent 刻意没有做的：
+1. **没有修改任何文件**。xlsx 和 csv 都保持原样，agent 只读取和比对。
+2. **没有代填缺失字段**。xlsx 缺少的 reviewer_id/reviewed_at/ai_assisted 未由 agent 补填。
+3. **没有判断哪个版本更权威**。两个文件都保留，报告里说明差异。
+
+**报告正文**：
+
+报告正文已写入 `docs/REPORT.md`（227 行），包含：
+- Introduction：RAG 系统概述和评估目标
+- Methodology：语料、QA 集、答案生成、评分协议、裁决过程
+- Experiments：answer_correctness = 11/26 = 0.4231，kappa = 0.0244，xlsx/csv 一致性
+- Discussions：结果解读、局限性、材料缺陷与工具改进、建议
+- Individual Contributions：待组员填写并签名
+
+agent 做的：
+1. 根据仓库内所有验证结果和日志撰写报告正文
+2. 如实呈现数字（0.4231、0.0244）和局限性（单裁决人、材料缺陷、AI-assisted）
+3. 未代填 Individual Contributions 页的组员姓名和签名
+
+agent 刻意没有做的：
+1. **没有修改任何实验数字**。报告里的数字全部来自已验证的日志和汇总文件。
+2. **没有代填组员贡献**。Individual Contributions 页留空待组员本人填写。
+3. **没有隐瞒 AI 参与**。报告明确说明 agent 撰写了正文，但判断和签名由组员完成。
+
+`--executor` 显式写明，未用缺省值。本机 `ruff check .` 通过，`python -m pytest -o addopts="" -q` 
+**335 passed / 2 skipped**。
+
+**人工复核状态：** `answer_correctness = 11/26 = 0.4231` 已入库，报告正文已完成。待做：组员本人重跑本轮任何命令；
+本 PR 的 `ci / check`；Individual Contributions 页组员签名。

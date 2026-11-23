@@ -17,6 +17,7 @@ from __future__ import annotations
 import csv
 import json
 import re
+import shlex
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -26,6 +27,8 @@ from eval import metrics as metrics_module
 from eval.evidence import locate_evidence
 from eval.metrics import (
     ALLOWED_GRADES,
+    CHUNK_TEXT_MISSING,
+    CHUNK_TEXT_UNRESOLVED,
     DEV_QA,
     PENDING_CORRECTNESS,
     QA_COLUMNS,
@@ -44,6 +47,7 @@ from eval.metrics import (
     evaluate_answers,
     evaluate_retrieval,
     frozen_doc_ids,
+    grades_provenance,
     load_grades,
     load_outputs,
     load_qa,
@@ -622,6 +626,28 @@ def test_grades_file_without_grade_column_is_rejected(tmp_path):
         load_grades(path)
 
 
+def test_two_grades_sheets_are_refused_instead_of_one_silently_winning(tmp_path, capsys):
+    """`--grades A --grades B` must not score only the last sheet.
+
+    Correctness is the one number a human produces, and the protocol asks for two
+    independent raters. A single-value flag quietly kept B, so one person's sheet
+    could reach the report as a graded run; the CLI now rejects the duplicate
+    before it reads an artifact or an index.
+    """
+    sheets = []
+    for name, grade in (("raterA.csv", "correct"), ("raterB.csv", "incorrect")):
+        path = tmp_path / name
+        path.write_text(f"qid,grade\nK01,{grade}\n", encoding="utf-8")
+        sheets.append(str(path))
+    assert metrics_module.main(["score", "--grades", sheets[0], "--grades", sheets[1]]) == 2
+    assert "exactly one csv" in capsys.readouterr().err
+
+    # One sheet still passes this guard: any later failure must be about inputs,
+    # never about the grade flags themselves.
+    assert metrics_module.main(["score", "--grades", sheets[0]]) == 2
+    assert "exactly one csv" not in capsys.readouterr().err
+
+
 def test_outputs_file_accepts_list_or_items_key(tmp_path):
     wrapped = tmp_path / "wrapped.json"
     wrapped.write_text(json.dumps({"items": [{"qid": "M01"}]}), encoding="utf-8")
@@ -669,6 +695,25 @@ def test_command_line_follows_the_arguments_main_was_given(monkeypatch):
         "python -m eval.metrics retrieval --chunking paragraph --hits 1,3 "
         "--out eval/results/raw/x.json"
     )
+
+
+def test_command_line_quoting_survives_a_copy_paste(monkeypatch):
+    """run.md says "reproduce with the command above", so the line must parse back.
+
+    Plain space-joining turned a multi-word ``--executor`` into a dozen bogus
+    arguments, which made the recorded provenance unrunnable and deniable.
+    """
+    monkeypatch.setattr(
+        metrics_module,
+        "_COMMAND_ARGS",
+        ["score", "--executor", "two raters, independently", "--formal"],
+    )
+    line = metrics_module._command_line()
+    assert shlex.split(line) == [
+        "python", "-m", "eval.metrics", "score", "--executor",
+        "two raters, independently", "--formal",
+    ]
+    assert "'two raters, independently'" in line
 
 
 # ---------------------------------------------------------------------------
@@ -818,6 +863,178 @@ def test_grading_sheet_shells_out_only_answerable_rows(documents, tmp_path):
         rows = list(csv.DictReader(handle))
     assert [row["category"] for row in rows] == ["answerable", "unanswerable"]
     assert rows[1]["abstained"] == "True", "rule-scored, so the grade cell stays empty"
+
+
+# ---------------------------------------------------------------------------
+# The 2026-11-22 grading incident: the sheet handed raters a truncated prefix
+# ---------------------------------------------------------------------------
+
+
+def _sheet_rows(sheet):
+    with sheet.open(encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def _prefix_split_inputs(documents):
+    """A cited chunk whose gold sentence starts after the artifact's quote prefix.
+
+    This is the shape that made eight real grades wrong: the answer artifact stores
+    only the first 200 characters of the cited chunk as the quote, so a rater
+    reading the quote sees a chunk that appears not to support the answer.
+    """
+    span = _span(documents, QUOTE_2020)
+    chunk = _chunk(documents, max(span.char_start - 60, 0), span.char_end, "rag_wikipedia#0008")
+    items = [_answerable("M01", QUOTE_2020), _unanswerable("N01")]
+    outputs = {
+        "M01": _record("M01", chunk),
+        "N01": {"qid": "N01", "abstained": True, "answer_text": "refused", "citations": []},
+    }
+    return items, outputs, chunk
+
+
+def test_grading_sheet_carries_the_full_cited_chunk_not_the_artifact_prefix(documents, tmp_path):
+    """Judging citation support needs the chunk; the prefix is not the evidence."""
+    items, outputs, chunk = _prefix_split_inputs(documents)
+    prefix = outputs["M01"]["citations"][0]["quote"]
+    assert QUOTE_2020 in chunk.text
+    assert QUOTE_2020 not in prefix, "the fixture must reproduce the truncated quote"
+
+    sheet = write_grading_sheet(
+        tmp_path / "grades.csv", items, outputs, chunk_of={chunk.chunk_id: chunk}.get
+    )
+    rows = _sheet_rows(sheet)
+    text = rows[0]["cited_chunk_text"]
+    assert text.startswith(f"[{chunk.chunk_id}] ")
+    assert QUOTE_2020 in text, "the rater must see the sentence inside the cited chunk"
+    assert prefix not in text or text != prefix
+    assert rows[1]["cited_chunk_text"] == "", "a refusal cites nothing"
+
+
+def test_unresolved_cited_chunk_text_says_so_instead_of_reading_empty(documents, tmp_path):
+    """An empty evidence cell reads as 'the chunk contains nothing'.
+
+    That is the wrong conclusion to reach quietly, so both failure modes are
+    printed as loud sentinels: no lookup supplied at all, and an id the index
+    does not know.
+    """
+    items, outputs, chunk = _prefix_split_inputs(documents)
+    blind = write_grading_sheet(tmp_path / "blind.csv", items, outputs)
+    assert _sheet_rows(blind)[0]["cited_chunk_text"] == CHUNK_TEXT_UNRESOLVED
+
+    empty = write_grading_sheet(
+        tmp_path / "empty.csv", items, outputs, chunk_of={}.get
+    )
+    text = _sheet_rows(empty)[0]["cited_chunk_text"]
+    assert CHUNK_TEXT_MISSING.format(cid=chunk.chunk_id) in text
+
+
+def test_non_utf8_grades_sheet_fails_with_a_resave_instruction(tmp_path):
+    """A sheet saved by a spreadsheet in the local codepage must not crash scoring."""
+    payload = 'qid,grade,judge_note\nM01,correct,"\u201cquote\u201d 与 chunk 全文一致"\n'
+    raw = payload.encode("gbk")
+    with pytest.raises(UnicodeDecodeError):
+        raw.decode("utf-8")
+    path = tmp_path / "grades.csv"
+    path.write_bytes(raw)
+    with pytest.raises(QASetError, match="not valid UTF-8.*re-save the grades sheet"):
+        load_grades(path)
+
+
+def test_ai_assisted_grades_sheet_is_not_summarised_as_blind_human_grading(
+    documents, tmp_path, monkeypatch
+):
+    """What the sheet declares about itself has to travel into the summary.
+
+    `load_grades()` reads qid and grade only, so a sheet carrying ai_assisted=yes
+    and a note saying an agent formatted 26 accepted AI suggestions would otherwise
+    reach run.md as an ordinary human-graded number.
+    """
+    frozen = tmp_path / "frozen_manifest.json"
+    frozen.write_text(json.dumps({"corpus_id": "cs5481-corpus-0001"}), encoding="utf-8")
+    monkeypatch.setattr("eval.metrics.FROZEN_MANIFEST", frozen)
+
+    sheet = tmp_path / "grades_ai.csv"
+    note = (
+        "User stated in chat that all suggestions were confirmed. "
+        "Agent formatted this file."
+    )
+    sheet.write_text(
+        'qid,grade,reviewer_id,reviewed_at,ai_assisted,confirmation_note\n'
+        f'M01,correct,rater-X,2026-11-22,yes,"{note}"\n',
+        encoding="utf-8",
+    )
+    provenance = grades_provenance(sheet)
+    assert provenance["declared_ai_assisted"] is True
+    assert provenance["ai_assisted"] == ["yes"]
+    assert provenance["reviewer_id"] == ["rater-X"]
+    assert provenance["confirmation_note_distinct"] == 1, "long prose is counted, not copied"
+    assert "confirmation_note" not in provenance
+
+    span = _span(documents, QUOTE_2020)
+    chunk = _chunk(documents, span.char_start, span.char_end, "rag_wikipedia#0007")
+    item = _answerable("M01", QUOTE_2020)
+    result = evaluate_answers(
+        [item],
+        {item.qid: span},
+        {"M01": _record("M01", chunk)},
+        chunk_of={chunk.chunk_id: chunk}.get,
+        grades=load_grades(sheet),
+    )
+    result.label = "REAL"
+    result.config = _config_snapshot(_stub_settings(), [item], min_coverage=0.5) | {
+        "grades_ref": "eval/review/grades_ai.csv@deadbeefcafe",
+        "grades_provenance": provenance,
+    }
+    directory = tmp_path / "summary" / "i4_answer_metrics"
+    write_summary(result, directory, executor="coding agent")
+
+    metrics = json.loads((directory / "metrics.json").read_text(encoding="utf-8"))
+    assert "AI-assisted" in metrics["judge"]
+    assert "not accept as blind human grading" in metrics["judge"]
+    run_log = (directory / "run.md").read_text(encoding="utf-8")
+    for fragment in (
+        "grades sheet: eval/review/grades_ai.csv@deadbeefcafe",
+        "grades sheet reviewer_id: rater-X",
+        "grades sheet ai_assisted: yes",
+        "grades sheet confirmation_note_first:",
+    ):
+        assert fragment in run_log, fragment
+
+
+def test_plain_grades_sheet_records_that_it_declares_no_rater(documents, tmp_path, monkeypatch):
+    """Silence about provenance is reported as silence, not as human grading."""
+    frozen = tmp_path / "frozen_manifest.json"
+    frozen.write_text(json.dumps({"corpus_id": "cs5481-corpus-0001"}), encoding="utf-8")
+    monkeypatch.setattr("eval.metrics.FROZEN_MANIFEST", frozen)
+
+    sheet = tmp_path / "grades_bare.csv"
+    sheet.write_text("qid,grade\nM01,correct\n", encoding="utf-8")
+    provenance = grades_provenance(sheet)
+    assert provenance["columns"] == []
+    assert provenance["declared_ai_assisted"] is False
+
+    span = _span(documents, QUOTE_2020)
+    chunk = _chunk(documents, span.char_start, span.char_end, "rag_wikipedia#0007")
+    item = _answerable("M01", QUOTE_2020)
+    result = evaluate_answers(
+        [item],
+        {item.qid: span},
+        {"M01": _record("M01", chunk)},
+        chunk_of={chunk.chunk_id: chunk}.get,
+        grades=load_grades(sheet),
+    )
+    result.label = "REAL"
+    result.config = _config_snapshot(_stub_settings(), [item], min_coverage=0.5) | {
+        "grades_ref": "eval/review/grades_bare.csv@feedface",
+        "grades_provenance": provenance,
+    }
+    directory = tmp_path / "summary" / "bare"
+    write_summary(result, directory, executor="A. Member")
+    run_log = (directory / "run.md").read_text(encoding="utf-8")
+    assert "declares no reviewer_id/reviewed_at/ai_assisted column" in run_log
+    assert "human grades supplied by --grades" in json.loads(
+        (directory / "metrics.json").read_text(encoding="utf-8")
+    )["judge"]
 
 
 # ---------------------------------------------------------------------------

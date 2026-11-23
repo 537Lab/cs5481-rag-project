@@ -132,3 +132,83 @@ PR 历史与 commit message 是贡献比例的**证据来源**，本文件只是
 在 PR #11 `c4516bf29317270b876193f66e864f8f053f785f` 的干净工作副本中运行 T4 `validate --require-reviewed`，确认 16 篇冻结文档和 36 题（26 条引文定位，10 条拒答有组员复核）。用本地 ONNX + Chroma 重新入库 fixed 668 块、paragraph 775 块，每个 collection 跑完 36 道题的完整排名。新进程读回两套索引，全部 1443 块及 216 条 top-3 的原文出处和字段回查一致。
 
 定向测试 143 passed，全量 328 passed / 2 skipped，Ruff 通过。排名案例、真实命令与 SHA-256 见 [RETRIEVAL.md](RETRIEVAL.md)。原始产物在 `eval/results/raw/`。执行记录为 Codex 本机验证。组员审批和本人复核待完成。
+
+
+### 2026-11-22 T4 I4 首轮答案核验与正式汇总入库（编码 agent 执行，组员未重跑）
+
+读取 T5 交接包（zip `c464299a…d4bd85`、36 条答案 jsonl `2ca74fde…346076`），不复用对方自检：
+qid 双向差集、12/12 引用逐字回查、由冻结快照重建 668 chunks 对齐 `handoff_check.json.index_chunks`、
+核对 `qa_set.csv` / `frozen_manifest.json` / `demo/ollama.toml` 三处 sha256。
+`python -m eval.metrics score --formal` 生成 `eval/results/summary/i4_answer_metrics/`，
+机检结果 correct_abstention 10/10、false_abstention 14/26=0.5385、citation_structure 12/12、
+hit@1 0.3077、hit@3 0.6923，`answer_correctness` 仍为 pending human grading（0/26 已评）。
+
+同轮修掉 metrics CLI 两处会造出假记录的缺陷：`run.md` 记录的命令行不加引号（与「按上面命令复现」自相矛盾）、
+`--grades` 重复传时静默只取最后一个（单人评分可被当成两位评分人）；并把 `judge_protocol.md` 与 `eval/README.md`
+指定的评分表路径从被 gitignore 的 `eval/results/raw/` 改到已跟踪的 `eval/review/`。
+本机 `ruff check .` 通过、`pytest` **330 passed / 2 skipped**；`validate --require-reviewed` exit=0。
+
+答案原件按 T5 的指示不入 Git，所以这份汇总是「按哈希可核」而非「按 CI 可复现」；要在 CI 里复现，
+需要 T5 把 jsonl 放进 `eval/answers/<run_id>.jsonl`（`score --run-id` 已实测可用）。
+人工评分、评分者一致性、`REVIEWED_BY` 之外的语义判断均未做，不由 agent 代填。云端 `ci / check` 待本 PR 触发。
+
+### 2026-11-23 T4 人工评分表验收：两份均不满足协议 §1，正确率仍不可报（编码 agent 执行）
+
+收到两份评分表。均只做只读取证，**未入库、未修改任何 grade、未填任何签名**。
+
+- 评分人 A（`ziqilin669`，`grades.csv` + `reviewer_notes.txt`）：文件为 GBK 而非 UTF-8，`load_grades()` 直接
+  `UnicodeDecodeError`；备注里评审起止时间仍是未填占位符（且写成不存在的 UTC+18），逐条说明未填。
+  26 条中仅 1 条 `correct`（`K17`）1 条 `unsure`（`K14`），读数 `1/26 = 0.0385`。他自己声明参与过生成配置并参考
+  AI 预审意见，按 §1 “不得看生成代码/提示词/模型名” 不构成盲评。
+- 评分人 B（`ldk13856478627-cell`）：表可直接读，26 条 tally `correct 11 / incorrect 15` 与声称一致，答案包
+  sha256 声称属实，读数 `11/26 = 0.4231`。但每行 `confirmation_note` 原文为“all 26 AI suggestions were
+  confirmed … not an independent blind review”，即**逐项人工判断数为 0**，同样不满足 §1。
+
+关键发现：两人 12 条可比条目上差 10 条，其中 **8 条完全可由“gold 句是否落在引用 prefix 前 200 字符内”预测**。
+这不是“谁评错了”，而是评分材料只给了截断前缀，评分人评的是展示窗口而非被引 chunk。按 §2 口径的一致性为
+`p_o = 2/12`、`kappa = 0.0244`；若用 26 行全量算会得到 `0.6154`，那全部由 14 条规则可判的拒答行贡献，不得写进报告。
+
+因此本轮除了决策 A 的裁决工作表，还落了三处 T4 侧修复（详见 `../RUNLOG.md` §14）：评分表增加 `cited_chunk_text`
+全文证据列；`config.json` / `run.md` / `metrics.json` 开始记录评分表的 `path@sha256` 与
+`reviewer_id` / `reviewed_at` / `ai_assisted`，AI 批量确认的表不会再被当成人工盲评读数；非 UTF-8 表给可执行报错而
+不是 traceback。`ruff` 通过，`pytest` **335 passed / 2 skipped**（新增 5 条）。
+
+**人工复核状态：**`answer_correctness` 仍为 pending。待 A 本人按全文重判 8 条、待第三人裁决 `K04` / `K14`，
+合并表填入 `eval/review/` 后才能重跑正式汇总。`Reviewer_B_confirmed_AI_assisted.xlsx` 与 csv 的逐条一致性尚未验证。
+
+### 2026-11-23 T4 第三人裁决完成，`answer_correctness` 正式入库（编码 agent 执行）
+
+T3 负责人 `usagi` 完成 12 条裁决，返回 `i4_adjudication_worksheet_third_review_AI_assisted_FINAL.csv`。
+验收通过：前 16 列未改、tally 11/1/0 属实、12 条 note 各不相同且引文可核。成员声明 AI 辅助证据整理，
+但 grades 由人裁决——与 B 的批量确认性质不同。
+
+合并 12 条裁决 + 14 条规则拒答 → `eval/review/grades_LOCAL-ollama-fixed-20261122.csv`（26 行，UTF-8 无 BOM）。
+重跑正式汇总：`answer_correctness = 11/26 = 0.4231`，`grading_coverage = 26/26 = 1.0000`。
+
+K04 是唯一弱项：gold 句在被引 chunk 里找不到，但 chunk 的 flag 表支持一步推理。第三人 note 自承 inference，
+T4 接受此裁决。若严格到只认逐字支持，数字为 10/26 = 0.3846。
+
+A/B 一致性仍报 `kappa = 0.0244`（分母 12），根因是材料缺陷（前缀截断）而非评分人信度。第三人裁决不产生
+新的独立性对，因此一致性数字不变。
+
+**人工复核状态：** `answer_correctness` 已入库，可写进报告。待做：报告正文如何呈现 0.4231 与 0.0244 的一致性
+数字（T4 待写）；`Reviewer_B_confirmed_AI_assisted.xlsx` 与 csv 的逐条一致性；组员本人重跑本轮任何命令；
+本 PR 的 `ci / check`。
+
+### 2026-11-23 xlsx/csv 一致性验证与报告正文完成（编码 agent 执行）
+
+验证 `Reviewer_B_confirmed_AI_assisted.xlsx` 与 `grades_reviewer_B_confirmed_AI_assisted.csv` 的逐条一致性。
+
+**结果**：
+- Grades 完全一致：26/26 条 grade 匹配（11 correct / 15 incorrect）
+- Tally 一致：xlsx 和 csv 都是 11/15
+- 其他字段差异：xlsx 是简化记录（无 reviewer_id/reviewed_at/ai_assisted，judge_note 全部写 "User confirmed..."）；
+  csv 是增强版（含逐条理由、元数据、AI-assisted 声明）
+
+**结论**：grades 实质一致，csv 更透明。可接受。
+
+报告正文已写入 `docs/REPORT.md`（227 行），包含 Introduction / Methodology / Experiments / Discussions / 
+Individual Contributions 五部分。Individual Contributions 页待组员填写并签名。
+
+**人工复核状态：** `answer_correctness` 已入库，报告正文已完成。待做：组员本人重跑本轮任何命令；
+本 PR 的 `ci / check`；Individual Contributions 页组员签名。
